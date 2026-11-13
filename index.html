@@ -1,0 +1,1873 @@
+<!doctype html><html><head><meta charset=utf8><meta name=viewport content="width=device-width,initial-scale=1,viewport-fit=cover"><style>:root{color-scheme:light;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}html{scroll-padding-top:env(safe-area-inset-top,0px)}body{margin:0;padding:0;font:14px -apple-system,BlinkMacSystemFont,sans-serif;background:#fff;color:#000}img{max-width:100%}[hidden]:not([hidden=until-found i]){display:none!important}</style></head><body>
+<title>Habit Foundry</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Fredoka:wght@400;500;600;700&family=Pixelify+Sans:wght@400;600;700&display=swap">
+<style>
+/* Layout: a game screen. Header HUD on top, a pannable world (the floor) filling the screen, details slide in from the right. */
+:root{
+  --paper:#e6ede4;       /* page */
+  --card:#ffffff;
+  --ink:#1f2a2e;
+  --ink-soft:#5a6a6e;
+  --line:#cdd8d1;
+  --hl:#ffd23f;          /* coin yellow */
+  --hud:rgba(255,255,255,.92);
+  --shadow:rgba(31,42,46,.18);
+  --world:day;
+  --f-display:"Pixelify Sans", ui-monospace, "SF Mono", Menlo, monospace;
+  --f-body:"Fredoka", "Nunito", system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --paper:#0f1518; --card:#1a2328; --ink:#e7eeea; --ink-soft:#9fb1ab; --line:#2c3a3f;
+    --hl:#ffcc33; --hud:rgba(26,35,40,.92); --shadow:rgba(0,0,0,.5); --world:night;
+    color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --paper:#0f1518; --card:#1a2328; --ink:#e7eeea; --ink-soft:#9fb1ab; --line:#2c3a3f;
+  --hl:#ffcc33; --hud:rgba(26,35,40,.92); --shadow:rgba(0,0,0,.5); --world:night;
+  color-scheme:dark;
+}
+*{box-sizing:border-box}
+html{background:var(--paper)}
+body{
+  background:var(--paper);
+  color:var(--ink);
+  font-family:var(--f-body);
+  font-size:17px;
+  line-height:1.4;
+  padding-left:max(16px, env(safe-area-inset-left, 0px));
+  padding-right:max(16px, env(safe-area-inset-right, 0px));
+  padding-block:0 32px;
+}
+button,input,textarea,select{font:inherit;color:inherit}
+:focus-visible{outline:3px solid var(--hl);outline-offset:2px}
+
+.top{display:flex;flex-wrap:wrap;align-items:center;gap:10px 18px;padding-block:14px 10px;max-width:1400px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;margin-right:auto}
+.brand canvas{width:32px;height:32px}
+.brand h1{font-family:var(--f-display);font-weight:700;font-size:24px;letter-spacing:.04em;margin:0;text-transform:uppercase}
+.stats{display:flex;gap:8px;flex-wrap:wrap}
+.chip{display:flex;align-items:center;gap:8px;border:2px solid var(--ink);border-radius:999px;background:var(--card);padding:3px 12px 3px 6px;font-size:14px;font-weight:500}
+.chip i{width:18px;height:18px;border-radius:50%;border:2px solid var(--ink);display:inline-block}
+.chip b{font-family:var(--f-display);font-size:18px;font-variant-numeric:tabular-nums;font-weight:600}
+.actions{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+
+.btn{border:2px solid var(--ink);border-bottom-width:4px;border-radius:10px;background:var(--card);padding:5px 14px;cursor:pointer;font-size:16px;font-weight:600;line-height:1.25}
+.btn:hover{filter:brightness(1.04)}
+.btn:active{border-bottom-width:2px;transform:translateY(2px)}
+.btn.hl{background:var(--hl);color:#1f2a2e}
+.btn[disabled]{opacity:.45;cursor:not-allowed;transform:none;border-bottom-width:4px}
+.btn.ghost{border-color:transparent;background:transparent;border-bottom-width:2px}
+.btn.ghost:hover{background:var(--paper)}
+.btn.big{font-size:20px;padding:10px 18px;width:100%}
+.btn.small{font-size:14px;padding:3px 10px;border-bottom-width:3px;border-radius:8px}
+.btn.danger{border-style:dashed;border-bottom-width:2px}
+.btn.on{background:var(--ink);color:var(--paper)}
+
+.tabs{display:flex;border:2px solid var(--ink);border-radius:10px;overflow:hidden;background:var(--card)}
+.tabs button{border:none;background:transparent;padding:6px 14px;cursor:pointer;font-family:var(--f-display);font-size:15px;letter-spacing:.05em;text-transform:uppercase}
+.tabs button + button{border-left:2px solid var(--ink)}
+.tabs button[aria-selected="true"]{background:var(--ink);color:var(--paper)}
+
+/* world */
+.floor{max-width:1400px;margin:0 auto;position:relative;height:clamp(440px, calc(100dvh - 150px), 1100px);border:3px solid var(--ink);border-radius:16px;overflow:hidden;background:#7fb35a}
+#floor{display:block;width:100%;height:100%;touch-action:none;cursor:grab}
+#floor.dragging{cursor:grabbing}
+.hud{position:absolute;z-index:2}
+.hud-card{background:var(--hud);border:2px solid var(--ink);border-radius:12px;box-shadow:0 3px 0 var(--shadow)}
+.hud-tl{top:10px;left:10px;right:200px;display:flex;gap:6px;flex-wrap:wrap}
+.jump{display:inline-flex;align-items:center;gap:6px;border:2px solid var(--ink);border-radius:999px;background:var(--hud);padding:2px 10px 2px 4px;cursor:pointer;font-size:14px;font-weight:600}
+.jump i{width:14px;height:14px;border-radius:50%;border:2px solid var(--ink)}
+.jump:hover{background:var(--card)}
+.hud-tr{top:10px;right:10px;display:flex;gap:6px;padding:5px}
+.hud-tr .btn{padding:3px 10px;font-size:15px}
+.hud-hint{left:10px;bottom:10px;font-size:13px;padding:4px 10px;color:var(--ink-soft)}
+.follow-pill{left:50%;bottom:12px;transform:translateX(-50%);display:flex;align-items:center;gap:10px;padding:6px 8px 6px 12px;font-size:15px;max-width:calc(100% - 220px)}
+.follow-pill b{font-family:var(--f-display);font-weight:600}
+#mini{right:10px;bottom:10px;width:180px;height:130px;border:2px solid var(--ink);border-radius:10px;cursor:crosshair;background:#7fb35a}
+.floor-foot{max-width:1400px;margin:10px auto 0;display:flex;gap:14px;align-items:center;flex-wrap:wrap;color:var(--ink-soft);font-size:14px}
+.floor-foot p{margin:0;max-width:80ch}
+.loading{position:absolute;inset:0;display:grid;place-items:center;font-family:var(--f-display);font-size:18px;color:#fff;background:#4c7a3a;z-index:3}
+
+/* drawer */
+.panel{position:fixed;top:0;right:0;bottom:0;width:min(400px,100%);background:var(--card);border-left:3px solid var(--ink);
+  padding:18px max(18px, env(safe-area-inset-right,0px)) calc(24px + env(safe-area-inset-bottom,0px)) 20px;
+  padding-top:calc(18px + env(safe-area-inset-top,0px));
+  overflow-y:auto;z-index:20;box-shadow:-6px 0 0 var(--shadow);display:flex;flex-direction:column;gap:14px}
+.panel-close{position:absolute;top:calc(10px + env(safe-area-inset-top,0px));right:max(12px, env(safe-area-inset-right,0px));border:none;background:none;font-family:var(--f-display);font-size:24px;cursor:pointer;padding:4px 8px}
+.eyebrow{font-family:var(--f-display);font-size:13px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-soft);display:flex;align-items:center;gap:8px}
+.swatch{width:14px;height:14px;border:2px solid var(--ink);border-radius:50%;display:inline-block;flex:none}
+.title-input{font-family:var(--f-display);font-weight:600;font-size:24px;border:none;border-bottom:2px dashed var(--line);background:transparent;width:100%;padding:2px 0}
+.title-input:focus{border-bottom-color:var(--ink);outline:none}
+.desc{margin:0;color:var(--ink-soft);font-size:16px}
+.desc b{color:var(--ink)}
+.formula{font-family:var(--f-display);font-size:14px;color:var(--ink-soft);margin:0}
+.stat-grid{display:grid;grid-template-columns:repeat(4,1fr);margin:0;border:2px solid var(--ink);border-radius:12px;overflow:hidden}
+.stat-grid div{padding:6px 8px;border-right:2px solid var(--ink)}
+.stat-grid div:last-child{border-right:none}
+.stat-grid dt{font-size:12px;color:var(--ink-soft)}
+.stat-grid dd{margin:0;font-family:var(--f-display);font-size:19px;font-variant-numeric:tabular-nums}
+.sec{display:flex;flex-direction:column;gap:8px;border-top:2px dashed var(--line);padding-top:12px}
+.sec h3{font-family:var(--f-display);font-size:14px;letter-spacing:.06em;text-transform:uppercase;margin:0}
+.row{display:flex;gap:8px;flex-wrap:wrap;align-items:center}
+.hint{font-size:14px;color:var(--ink-soft);margin:0}
+.field{display:flex;flex-direction:column;gap:4px;font-size:14px;color:var(--ink-soft)}
+.field input,.field textarea{border:2px solid var(--ink);border-radius:8px;background:var(--paper);padding:6px 8px;font-size:16px;color:var(--ink)}
+.field textarea{resize:vertical;min-height:64px}
+.bar{height:14px;border:2px solid var(--ink);border-radius:7px;background:var(--paper);position:relative;overflow:hidden}
+.bar i{position:absolute;inset:0 auto 0 0;background:var(--sys,#3f9a5a)}
+.big-num{font-family:var(--f-display);font-size:30px;font-variant-numeric:tabular-nums}
+.big-num small{font-size:16px;color:var(--ink-soft)}
+
+/* modal */
+.scrim{position:fixed;inset:0;background:rgba(15,21,24,.5);z-index:30;display:grid;place-items:center;padding:max(16px, env(safe-area-inset-top,0px)) max(16px, env(safe-area-inset-right,0px)) max(16px, env(safe-area-inset-bottom,0px)) max(16px, env(safe-area-inset-left,0px))}
+.modal{background:var(--card);border:3px solid var(--ink);border-radius:18px;box-shadow:0 8px 0 var(--shadow);width:min(840px,100%);max-height:100%;overflow-y:auto;padding:22px;display:flex;flex-direction:column;gap:16px;position:relative}
+.modal h2{font-family:var(--f-display);font-size:24px;margin:0;text-wrap:balance}
+.tpl-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(230px,1fr));gap:14px}
+.tpl{border:2px solid var(--ink);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px;background:var(--paper)}
+.tpl h3{margin:0;font-family:var(--f-display);font-size:18px;display:flex;align-items:center;gap:8px}
+.tpl .motto{font-size:14px;color:var(--ink-soft);margin:0}
+.tpl ol{margin:0;padding-left:20px;font-size:14px}
+.tpl .from{font-size:12px;font-family:var(--f-display);color:var(--ink-soft);letter-spacing:.05em;text-transform:uppercase}
+.tpl .btn{margin-top:auto;align-self:flex-start}
+.quiz-sys{border:2px solid var(--ink);border-radius:14px;padding:12px;display:flex;flex-direction:column;gap:8px}
+.quiz-sys legend{font-family:var(--f-display);font-size:17px;padding:0 6px;display:flex;align-items:center;gap:6px}
+.check{display:flex;gap:8px;align-items:center;font-size:16px}
+.check input{width:20px;height:20px;accent-color:#1f2a2e}
+.check.done{color:var(--ink-soft)}
+.rate{display:flex;gap:6px;flex-wrap:wrap}
+.rate label{border:2px solid var(--ink);border-radius:8px;min-width:40px;text-align:center;cursor:pointer;font-family:var(--f-display);overflow:hidden}
+.rate input{position:absolute;opacity:0;pointer-events:none}
+.rate span{display:block;padding:2px 8px}
+.rate input:checked + span{background:var(--hl);color:#1f2a2e}
+.rate input:focus-visible + span{outline:3px solid var(--hl)}
+
+.toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom,0px));transform:translateX(-50%);background:var(--ink);color:var(--paper);padding:10px 16px;border-radius:12px;z-index:40;max-width:min(560px,calc(100% - 32px));font-size:16px;box-shadow:0 4px 0 var(--hl)}
+.timer-pill{position:fixed;left:max(16px, env(safe-area-inset-left,0px));bottom:calc(16px + env(safe-area-inset-bottom,0px));z-index:25;background:var(--card);border:3px solid var(--ink);border-radius:14px;box-shadow:0 4px 0 var(--shadow);padding:8px 12px;display:flex;gap:12px;align-items:center;flex-wrap:wrap;max-width:calc(100% - 32px)}
+.timer-pill .t{font-family:var(--f-display);font-size:26px;font-variant-numeric:tabular-nums}
+.timer-pill .n{font-size:14px;color:var(--ink-soft);max-width:22ch}
+
+/* progress page */
+.prog{max-width:1240px;margin:0 auto;display:flex;flex-direction:column;gap:22px}
+.prog h2{font-family:var(--f-display);font-size:26px;margin:0;text-wrap:balance}
+.banner{border:2px dashed var(--ink);border-radius:12px;background:var(--card);padding:10px 14px;font-size:15px;display:flex;gap:12px;align-items:center;flex-wrap:wrap}
+.banner b{font-family:var(--f-display);font-size:13px;letter-spacing:.08em;text-transform:uppercase;background:var(--hl);color:#1f2a2e;padding:2px 6px;border-radius:4px}
+.tiles{display:grid;grid-template-columns:repeat(4,1fr);gap:12px}
+.tile{border:2px solid var(--ink);border-radius:14px;background:var(--card);padding:10px 14px;display:flex;flex-direction:column;gap:2px}
+.tile span{font-size:14px;color:var(--ink-soft)}
+.tile b{font-family:var(--f-display);font-size:30px;font-weight:600;font-variant-numeric:tabular-nums;line-height:1.1}
+.tile small{font-size:13px;color:var(--ink-soft)}
+.fig{border:2px solid var(--ink);border-radius:16px;background:var(--card);padding:16px 18px 12px;display:flex;flex-direction:column;gap:8px;min-width:0}
+.fig-head{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;flex-wrap:wrap}
+.fig h3{font-family:var(--f-display);font-size:19px;margin:0;letter-spacing:.03em;text-transform:uppercase}
+.fig .eq{font-family:var(--f-display);font-size:13px;color:var(--ink-soft);margin:2px 0 0}
+.fig .cap{font-size:15px;color:var(--ink-soft);margin:0;max-width:75ch}
+.fig .cap b{font-weight:500;background:var(--hl);color:#1f2a2e;padding:0 3px;border-radius:3px}
+.legend{display:flex;gap:6px 14px;flex-wrap:wrap;font-size:14px;align-items:center}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{width:16px;height:4px;display:inline-block;border-radius:2px}
+.legend i.dash{background:repeating-linear-gradient(90deg,var(--ink-soft) 0 4px,transparent 4px 7px);height:2px}
+.chart{position:relative;width:100%;overflow-x:auto}
+.chart svg{display:block}
+.chart .grid{stroke:var(--line);stroke-width:1}
+.chart .axis{stroke:var(--ink);stroke-width:2}
+.chart .tick{fill:var(--ink-soft);font:12px var(--f-display);font-variant-numeric:tabular-nums}
+.chart .ann{fill:var(--ink);font:600 12px var(--f-display);letter-spacing:.04em}
+.chart .lbl{fill:var(--ink);font:500 14px var(--f-body)}
+.chart .ref{stroke:var(--ink-soft);stroke-width:2;fill:none;stroke-dasharray:5 4}
+.chart .hov line{stroke:var(--ink);stroke-width:1;stroke-dasharray:3 3}
+.chips{display:flex;gap:6px;flex-wrap:wrap}
+.chips button{border:2px solid var(--ink);border-radius:999px;background:var(--paper);padding:2px 10px;cursor:pointer;font-size:14px;display:inline-flex;gap:6px;align-items:center}
+.chips button[aria-pressed="true"]{background:var(--ink);color:var(--paper)}
+.two{display:grid;grid-template-columns:3fr 2fr;gap:22px}
+.chain{display:flex;flex-direction:column;gap:6px;padding-block:8px;border-top:2px dashed var(--line)}
+.chain:first-of-type{border-top:none}
+.chain-name{font-family:var(--f-display);font-size:15px;display:flex;align-items:center;gap:8px}
+.chain-row{display:flex;flex-wrap:wrap;align-items:flex-start;gap:6px}
+.factor{display:flex;flex-direction:column;align-items:center;min-width:56px;max-width:110px;text-align:center}
+.factor b{font-family:var(--f-display);font-size:18px;font-weight:600;font-variant-numeric:tabular-nums;border:2px solid var(--ink);border-radius:8px;padding:0 6px;background:var(--paper)}
+.factor small{font-size:12px;color:var(--ink-soft);line-height:1.15;margin-top:2px}
+.op{font-family:var(--f-display);font-size:18px;padding-top:2px}
+.factor.total b{background:var(--hl);color:#1f2a2e}
+details.nums summary{cursor:pointer;font-size:14px;color:var(--ink-soft)}
+details.nums table{border-collapse:collapse;font-size:13px;margin-top:6px;font-variant-numeric:tabular-nums}
+details.nums th,details.nums td{border:1px solid var(--line);padding:3px 8px;text-align:right}
+details.nums th:first-child,details.nums td:first-child{text-align:left}
+.tbl-wrap{overflow-x:auto}
+.tip{position:fixed;z-index:50;pointer-events:none;background:var(--card);border:2px solid var(--ink);border-radius:10px;box-shadow:0 3px 0 var(--shadow);padding:6px 10px;font-size:14px;min-width:140px}
+.tip .t-h{font-family:var(--f-display);font-size:12px;color:var(--ink-soft);margin-bottom:2px}
+.tip .t-r{display:flex;gap:8px;align-items:center;justify-content:space-between}
+.tip .t-r span{display:inline-flex;align-items:center;gap:6px}
+.tip .t-r i{width:10px;height:10px;display:inline-block;border-radius:2px}
+.tip .t-r b{font-family:var(--f-display);font-weight:600;font-variant-numeric:tabular-nums}
+
+@media (max-width:900px){ .two{grid-template-columns:1fr} .tiles{grid-template-columns:repeat(2,1fr)} }
+@media (max-width:700px){
+  .panel{top:auto;left:0;width:100%;max-height:72%;border-left:none;border-top:3px solid var(--ink);border-radius:18px 18px 0 0;box-shadow:0 -6px 0 var(--shadow);padding-left:max(18px, env(safe-area-inset-left,0px))}
+  .brand h1{font-size:20px}
+  .stat-grid{grid-template-columns:repeat(2,1fr)}
+  .stat-grid div:nth-child(2){border-right:none}
+  .stat-grid div:nth-child(-n+2){border-bottom:2px solid var(--ink)}
+  .hud-tl{right:10px;top:58px}
+  .hud-hint{display:none}
+  #mini{width:120px;height:86px}
+  .follow-pill{max-width:calc(100% - 150px);left:10px;transform:none;bottom:10px;font-size:13px}
+  .floor{height:clamp(420px, calc(100dvh - 210px), 900px)}
+}
+</style>
+
+<header class="top">
+  <div class="brand"><canvas id="logo" width="32" height="32" aria-hidden="true"></canvas><h1>Habit Foundry</h1></div>
+  <div class="stats" aria-label="Totals">
+    <div class="chip" title="Earned by running machines, timers and the daily check-in. Spend them on upgrades."><i style="background:var(--hl)"></i>Cogs <b id="s-cogs">0</b></div>
+    <div class="chip" title="Every habit run is a vote for the person you are becoming."><i style="background:#3a6fd8"></i>Votes <b id="s-votes">0</b></div>
+    <div class="chip" title="Days you ran at least one machine. Missed days never subtract."><i style="background:#3f9a5a"></i>Days shown up <b id="s-days">0</b></div>
+  </div>
+  <div class="actions">
+    <div class="tabs" role="tablist" aria-label="View">
+      <button role="tab" id="tab-floor" aria-selected="true">World</button>
+      <button role="tab" id="tab-prog" aria-selected="false">Progress</button>
+    </div>
+    <button class="btn hl" id="b-quiz">Daily check-in</button>
+    <button class="btn" id="b-lib">Library</button>
+  </div>
+</header>
+
+<div id="view-floor">
+  <main class="floor" id="floorWrap">
+    <canvas id="floor" tabindex="0" role="img" aria-label="Your factory world. Each plot is one production line of habits."></canvas>
+    <div class="hud hud-tl" id="jump"></div>
+    <div class="hud hud-tr hud-card">
+      <button class="btn small" id="b-follow" title="Follow a unit down the belt (F)">Follow</button>
+      <button class="btn small" id="b-zout" aria-label="Zoom out">−</button>
+      <button class="btn small" id="b-zin" aria-label="Zoom in">+</button>
+      <button class="btn small" id="b-fit" title="See the whole world">All</button>
+    </div>
+    <div class="hud hud-card follow-pill" id="followPill" hidden></div>
+    <div class="hud hud-card hud-hint">Drag or scroll to move · Ctrl + scroll or pinch to zoom · Click a building</div>
+    <canvas id="mini" class="hud" aria-label="Minimap. Click to jump."></canvas>
+    <div class="loading" id="loading">Unpacking your factory…</div>
+  </main>
+  <div class="floor-foot">
+    <button class="btn" id="b-add">+ Build a new plot</button>
+    <p>Each plot is a habit line. The extractor mines a unit worth 1, every machine multiplies it, and each machine grows 1% stronger on every day you run it. Missed days cost nothing.</p>
+    <span id="saveNote"></span>
+  </div>
+</div>
+<section id="view-progress" class="prog" hidden></section>
+<div class="tip" id="tip" hidden></div>
+
+<aside class="panel" id="panel" hidden aria-label="Details"></aside>
+<div class="scrim" id="scrim" hidden></div>
+<div class="timer-pill" id="timerPill" hidden></div>
+<div class="toast" id="toast" hidden role="status"></div>
+
+<script>
+(() => {
+const $ = s => document.querySelector(s);
+const T = 32;                              // world tile size
+const SHAPES = ['circle','square','triangle','diamond','hexagon'];
+const SHAPE_GLYPH = {circle:'●',square:'■',triangle:'▲',diamond:'◆',hexagon:'⬢',star:'★'};
+const KINDS = ['factory','press','tower','dome','silo'];
+const HUES = ['#3f9a5a','#3a6fd8','#d0503f','#8a5bd1','#c47a12','#00999a'];
+const OLD_HUES = {'#d98a2b': '#c47a12', '#2a9d9a': '#00999a'};
+const OLD_TARGETS = {health: 300, business: 300, mcat: 300, research: 240, reading: 240, calm: 200};
+const LS = 'habit-foundry-v1', LS_CAM = 'habit-foundry-cam';
+const TIMER_PRESETS = [2,10,25,45];
+const BELT_SPEED = 1.6;                    // tiles per second
+
+// compounding: every machine starts at ×1.10, +0.05 per upgrade level, +0.01 for every day it has run
+const machineMult = st => 1.10 + 0.05 * (st.level - 1) + 0.01 * (st.days || 0);
+const lineMult = sys => sys.stations.slice(1).reduce((m, st) => m * machineMult(st), 1);
+const fmtX = m => '×' + (m < 10 ? m.toFixed(2) : m < 100 ? m.toFixed(1) : Math.round(m).toLocaleString());
+const fmtPts = n => n < 100 ? (Math.round(n * 10) / 10).toLocaleString() : Math.round(n).toLocaleString();
+
+const uid = () => Math.random().toString(36).slice(2,10);
+const dayKey = (d = new Date()) => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+const daysBetween = (a,b) => Math.round((new Date(b+'T12:00') - new Date(a+'T12:00')) / 864e5);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clamp = (v,a,b) => Math.max(a, Math.min(b, v));
+const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------- library: the four lines from the notebook, plus two extras ---------- */
+const TEMPLATES = [
+  {key:'health', from:'notebook', name:'Health', motto:'I am a person who cares about my health.', goal:'Reach 75 kg', target:2000, resource:'Energy',
+   stations:['Wake up consistently with good sleep','Get out of bed','Morning jump rope','Track calories','Evening workout']},
+  {key:'business', from:'notebook', name:'Business', motto:'I am someone who builds things and ships them.', goal:'Launch 30 tested ideas', target:2000, resource:'Focus',
+   stations:['Sit down at the computer','Remove distractions','Get a new idea','Test it','Market it']},
+  {key:'mcat', from:'notebook', name:'MCAT', motto:'I am a future doctor who studies every day.', goal:'Score in the 90th percentile', target:1600, resource:'Knowledge',
+   stations:['Set daily goals','Record a daily passage','Read a Kaplan chapter','Anki reviews']},
+  {key:'research', from:'notebook', name:'Research', motto:'I am a researcher who explains ideas clearly.', goal:'Become a better writer and explainer', target:1200, resource:'Curiosity',
+   stations:['Send cold emails','Follow trends and news','Write and explain one idea']},
+  {key:'reading', from:'extra', name:'Reading', motto:'I am a reader.', goal:'Finish 24 books this year', target:1200, resource:'Attention',
+   stations:['Put the phone in another room','Read 10 pages','Write one note']},
+  {key:'calm', from:'extra', name:'Calm mind', motto:'I am someone who stays steady under pressure.', goal:'Feel calm most days', target:1000, resource:'Breath',
+   stations:['Two minutes of breathing','Walk outside','Write tomorrow’s top 3']},
+];
+
+function buildSystem(t, hueIdx){
+  return {
+    id: uid(), tpl: t.key || 'custom', name: t.name, motto: t.motto, goal: t.goal, target: t.target || 2000,
+    resource: t.resource || 'Raw material', hue: HUES[hueIdx % HUES.length], delivered: 0, reached: false,
+    stations: t.stations.map(n => ({id: uid(), name: n, tiny: '', level: 1, runs: 0, days: 0, charge: 0, last: null}))
+  };
+}
+function defaultState(){
+  return {
+    v: 2, cogs: 3, votes: 0, days: 0, lastDay: null, lastVisit: null, checkinDay: null, notes: [], hist: {},
+    systems: TEMPLATES.filter(t => t.from === 'notebook').map((t,i) => buildSystem(t, i)),
+    items: [], timer: null
+  };
+}
+
+/* ---------- persistence: private per-account doc, browser storage as backup ---------- */
+let state = null, ref = null, saving = false, pending = false, saveTimer = null;
+const withTimeout = (p, ms) => Promise.race([p, new Promise(r => setTimeout(() => r(undefined), ms))]);
+
+async function connectStore(){
+  try {
+    if (!window.claude?.use) return null;
+    const res = await withTimeout(Promise.all([window.claude.use('db'), window.claude.use('user')]), 10000);
+    if (!res) return null;
+    const [db, user] = res;
+    if (!db || !user) return null;
+    const id = await user.id();
+    if (!id) return null;
+    ref = db.doc('data/users/' + id + '/factory');
+    const snap = await withTimeout(ref.get(), 10000);
+    if (snap?.exists) { const d = snap.data(); if (d?.json) return JSON.parse(d.json); }
+    return null;
+  } catch (e) { return null; }
+}
+function readLocal(){ try { const s = localStorage.getItem(LS); return s ? JSON.parse(s) : null; } catch (e) { return null; } }
+function save(){ clearTimeout(saveTimer); saveTimer = setTimeout(flush, 700); }
+async function flush(){
+  if (!state) return;
+  const json = JSON.stringify(state);
+  try { localStorage.setItem(LS, json); } catch (e) {}
+  if (!ref) return;
+  if (saving) { pending = true; return; }
+  saving = true;
+  try { await ref.set({json, at: Date.now()}); }
+  catch (e) { if (e?.code === 'invalid_argument' || e?.code === 'revoked' || e?.code === 'not_granted') { ref = null; setSaveNote(); } }
+  saving = false;
+  if (pending) { pending = false; flush(); }
+}
+function setSaveNote(){
+  $('#saveNote').textContent = ref ? 'Saved privately to your Claude account.' : 'Saved in this browser.';
+}
+
+/* ---------- theme: UI tokens + day / night world ---------- */
+let COL = {}, WP = {};
+const WORLD = {
+  day: {night: false, grass: '#8cc063', grassD: '#7fb457', grassL: '#9acb70', tuft: '#6fa24a', dirt: '#c9a46b', dirtD: '#b48f58',
+    pave: '#dcd8cc', paveD: '#c8c3b4', curb: '#a9a395', belt: '#3d454b', rail: '#262b30', chev: '#f2c94c', mottoInk: 'rgba(255,255,255,.82)',
+    shadow: 'rgba(20,30,20,.22)', wall: '#efe9dc', wallD: '#d8d0bf', outline: '#263034', white: '#ffffff', win: '#5d7f8e',
+    tree: '#4e9a48', treeD: '#3b7d38', treeL: '#68b25c', trunk: '#7a5634', rock: '#a7a9a3', flower: ['#ffffff', '#ffd23f', '#f28da0'],
+    plate: '#fffaf0', text: '#1f2a2e', soft: '#5a6a6e', smoke: 'rgba(255,255,255,.75)', wood: '#b9824d', woodD: '#8e5f33'},
+  night: {night: true, grass: '#24402f', grassD: '#203a2a', grassL: '#2b4a37', tuft: '#1b3326', dirt: '#5a4a36', dirtD: '#4c3e2d',
+    pave: '#3b434a', paveD: '#343b41', curb: '#262c31', belt: '#1c2125', rail: '#0c0f11', chev: '#d9b244', mottoInk: 'rgba(255,240,200,.7)',
+    shadow: 'rgba(0,0,0,.35)', wall: '#5c666e', wallD: '#4b545b', outline: '#0b0e10', white: '#1f272c', win: '#ffd76a',
+    tree: '#2f5f3a', treeD: '#244b2d', treeL: '#3a7046', trunk: '#4a3626', rock: '#5d6262', flower: ['#c9d3dc', '#d9b244', '#b0687a'],
+    plate: '#232c31', text: '#e7eeea', soft: '#9fb1ab', smoke: 'rgba(200,210,220,.35)', wood: '#6d4b2d', woodD: '#4f351f'},
+};
+function readColors(){
+  const cs = getComputedStyle(document.documentElement);
+  const g = n => cs.getPropertyValue(n).trim();
+  COL = {paper: g('--paper'), ink: g('--ink'), soft: g('--ink-soft'), hl: g('--hl'), card: g('--card'), line: g('--line')};
+  WP = WORLD[g('--world') === 'night' ? 'night' : 'day'];
+  mixCache.clear();
+  $('#floorWrap').style.background = WP.grass;
+  $('#mini').style.background = WP.grass;
+  drawLogo();
+  if (state && view === 'progress') renderProgress();
+}
+function hexRgb(h){ h = h.replace('#', ''); if (h.length === 3) h = h.split('').map(c => c + c).join(''); const n = parseInt(h, 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+const mixCache = new Map();
+function mix(a, b, t){
+  const k = a + b + t; let v = mixCache.get(k); if (v) return v;
+  const A = hexRgb(a), B = hexRgb(b);
+  v = `rgb(${A.map((x, i) => Math.round(x + (B[i] - x) * t)).join(',')})`;
+  mixCache.set(k, v); return v;
+}
+const hash = (i, j) => { const s = Math.sin(i * 127.1 + j * 311.7) * 43758.5453; return s - Math.floor(s); };
+
+/* ---------- world geometry: plots stacked down the map, slightly staggered ---------- */
+function geom(sys, i){
+  const n = sys.stations.length;
+  const x0 = (i % 2) * 4 * T, y0 = i * 12 * T;
+  const xs = [];
+  for (let k = 0; k <= n; k++) xs.push(x0 + (3.5 + 5 * k) * T);
+  return {n, x0, y0, w: (7 + 5 * n) * T, h: 9 * T, xs, beltY: y0 + 5.5 * T, base: y0 + 6.15 * T};
+}
+const beltFrac = (g, k) => (g.xs[k] - g.xs[0]) / (g.xs[g.n] - g.xs[0]);
+const outputShape = (k, n) => k === n - 1 ? 'star' : SHAPES[Math.min(k, SHAPES.length - 1)];
+function worldBounds(){
+  let x1 = 20 * T, y1 = 10 * T;
+  state.systems.forEach((s, i) => { const g = geom(s, i); x1 = Math.max(x1, g.x0 + g.w); y1 = Math.max(y1, g.y0 + g.h); });
+  return {x0: -6 * T, y0: -5 * T, x1: x1 + 6 * T, y1: y1 + 5 * T};
+}
+let decor = [], decorKey = '';
+function buildDecor(){
+  const key = state.systems.map(s => s.stations.length).join(',');
+  if (key === decorKey) return;
+  decorKey = key; decor = [];
+  const b = worldBounds();
+  const plots = state.systems.map((s, i) => geom(s, i));
+  for (let j = Math.floor(b.y0 / T) - 4; j < b.y1 / T + 4; j++) for (let i = Math.floor(b.x0 / T) - 6; i < b.x1 / T + 6; i++) {
+    const wx = i * T + T / 2, wy = j * T + T / 2;
+    if (plots.some(g => wx > g.x0 - 1.5 * T && wx < g.x0 + g.w + 1.5 * T && wy > g.y0 - 1.2 * T && wy < g.y0 + g.h + .8 * T)) continue;
+    const h = hash(i, j), jx = (hash(j, i) - .5) * T * .6, jy = (hash(i + 7, j) - .5) * T * .6;
+    if (h < .085) decor.push({t: 'tree', x: wx + jx, y: wy + jy, s: .8 + hash(i, j + 3) * .5});
+    else if (h < .11) decor.push({t: 'bush', x: wx + jx, y: wy + jy, s: .7 + hash(i + 2, j) * .4});
+    else if (h < .125) decor.push({t: 'rock', x: wx + jx, y: wy + jy, s: .6 + hash(i, j + 9) * .5});
+    else if (h < .19) decor.push({t: 'flower', x: wx + jx, y: wy + jy, c: Math.floor(hash(i + 3, j + 1) * 3)});
+  }
+  decor.sort((a, b) => a.y - b.y);
+}
+
+/* ---------- camera ---------- */
+const canvas = $('#floor'), ctx = canvas.getContext('2d');
+const mini = $('#mini'), mctx = mini.getContext('2d');
+let W = 0, H = 0, hits = [], itemHits = [];
+const cam = {x: 0, y: 0, z: 1, tx: 0, ty: 0, tz: 1, anim: false, follow: null, followSys: null};
+const ZMIN = .3, ZMAX = 2.4;
+const DPR = () => Math.min(window.devicePixelRatio || 1, 2);
+function resize(){
+  const r = $('#floorWrap').getBoundingClientRect();
+  const w = Math.round(r.width), h = Math.round(r.height);
+  if (w === W && h === H) return;
+  W = w; H = h;
+  const d = DPR();
+  canvas.width = Math.round(W * d); canvas.height = Math.round(H * d);
+  const mw = mini.clientWidth, mh = mini.clientHeight;
+  mini.width = Math.round(mw * d); mini.height = Math.round(mh * d);
+}
+const toWorld = (sx, sy) => [cam.x + (sx - W / 2) / cam.z, cam.y + (sy - H / 2) / cam.z];
+function clampCam(){
+  const b = worldBounds();
+  cam.x = clamp(cam.x, b.x0, b.x1); cam.y = clamp(cam.y, b.y0, b.y1);
+}
+function settle(){ cam.tx = cam.x; cam.ty = cam.y; cam.tz = cam.z; cam.anim = false; }
+function flyTo(x, y, z){ cam.tx = x; cam.ty = y; cam.tz = clamp(z ?? cam.z, ZMIN, ZMAX); cam.anim = true; }
+function flyToPlot(i, instant){
+  const s = state.systems[i]; if (!s) return;
+  const g = geom(s, i);
+  stopFollow();
+  flyTo(g.x0 + g.w / 2, g.y0 + 4.6 * T, clamp(Math.min(W / (g.w + 2 * T), H / (g.h + 4 * T)), .45, 1.5));
+  if (instant) { cam.x = cam.tx; cam.y = cam.ty; cam.z = cam.tz; cam.anim = false; }
+}
+function fitAll(){
+  const b = worldBounds();
+  stopFollow();
+  flyTo((b.x0 + b.x1) / 2, (b.y0 + b.y1) / 2, Math.min(W / (b.x1 - b.x0), H / (b.y1 - b.y0)) * 1.05);
+}
+function zoomAt(sx, sy, factor){
+  const [wx, wy] = toWorld(sx, sy);
+  const z = clamp(cam.z * factor, ZMIN, ZMAX);
+  cam.z = z; cam.x = wx - (sx - W / 2) / z; cam.y = wy - (sy - H / 2) / z;
+  clampCam();
+  if (cam.follow) { cam.tz = z; } else settle();
+}
+function saveCam(){ try { localStorage.setItem(LS_CAM, JSON.stringify({x: cam.x, y: cam.y, z: cam.z})); } catch (e) {} }
+
+/* ---------- follow a unit ---------- */
+function itemPos(it){
+  const i = state.systems.findIndex(s => s.id === it.sys); if (i < 0) return null;
+  const g = geom(state.systems[i], i);
+  return [g.xs[0] + Math.max(0, it.f) * (g.xs[g.n] - g.xs[0]), g.beltY - 2];
+}
+function startFollow(it){
+  cam.follow = it.id; cam.followSys = it.sys; cam.anim = false;
+  cam.tz = Math.max(cam.z, 1.1);
+  $('#b-follow').classList.add('on'); $('#b-follow').textContent = 'Following';
+  renderFollowPill();
+}
+function stopFollow(){
+  cam.follow = null; cam.followSys = null;
+  $('#b-follow').classList.remove('on'); $('#b-follow').textContent = 'Follow';
+  $('#followPill').hidden = true;
+}
+function followNearest(){
+  const [cx, cy] = [cam.x, cam.y];
+  let best = null, bd = Infinity;
+  for (const it of state.items) { const p = itemPos(it); if (!p) continue; const d = Math.hypot(p[0] - cx, p[1] - cy) - (it.f >= 0 ? 0 : 200); if (d < bd) { bd = d; best = it; } }
+  if (best) startFollow(best);
+  else toast('Nothing is on the belts yet. Run an extractor to send a unit down the line.');
+}
+let lastPill = 0;
+function renderFollowPill(){
+  const it = state.items.find(i => i.id === cam.follow);
+  const pill = $('#followPill');
+  if (!it) { pill.hidden = true; return; }
+  const s = state.systems.find(x => x.id === it.sys);
+  const next = s.stations[it.next];
+  pill.hidden = false;
+  pill.innerHTML = `<span class="swatch" style="background:${s.hue}"></span><span>${esc(s.name)} unit <b>${fmtX(it.mult || 1)}</b> · next: ${esc(next ? next.name : 'the vault')}</span><button class="btn small" data-stop>Stop</button>`;
+}
+$('#followPill').addEventListener('click', e => { if (e.target.closest('[data-stop]')) stopFollow(); });
+
+/* ---------- drawing helpers ---------- */
+let fontFamilies = {display: '"Pixelify Sans", monospace', body: 'Fredoka, system-ui, sans-serif'};
+const F = (w, px, fam = 'body') => `${w} ${px}px ${fontFamilies[fam]}`;
+function rrect(x, y, w, h, r){ ctx.beginPath(); ctx.roundRect ? ctx.roundRect(x, y, w, h, r) : ctx.rect(x, y, w, h); }
+function fillStroke(fill, lw = 2){ ctx.fillStyle = fill; ctx.fill(); ctx.lineWidth = lw; ctx.strokeStyle = WP.outline; ctx.stroke(); }
+function shapePath(c, name, x, y, r){
+  c.beginPath();
+  switch (name) {
+    case 'circle': c.arc(x, y, r, 0, Math.PI * 2); break;
+    case 'square': c.rect(x - r * .82, y - r * .82, r * 1.64, r * 1.64); break;
+    case 'triangle': c.moveTo(x, y - r); c.lineTo(x + r * .98, y + r * .75); c.lineTo(x - r * .98, y + r * .75); c.closePath(); break;
+    case 'diamond': c.moveTo(x, y - r); c.lineTo(x + r, y); c.lineTo(x, y + r); c.lineTo(x - r, y); c.closePath(); break;
+    case 'hexagon': for (let i = 0; i < 6; i++) { const a = Math.PI / 3 * i; c[i ? 'lineTo' : 'moveTo'](x + r * Math.cos(a), y + r * Math.sin(a)); } c.closePath(); break;
+    case 'star': for (let i = 0; i < 10; i++) { const rr = i % 2 ? r * .45 : r, a = -Math.PI / 2 + i * Math.PI / 5; c[i ? 'lineTo' : 'moveTo'](x + rr * Math.cos(a), y + rr * Math.sin(a)); } c.closePath(); break;
+  }
+}
+// a 3/4-view block: shadow, front face, top face
+function box(cx, baseY, w, d, h, front, top){
+  ctx.fillStyle = WP.shadow; ctx.fillRect(cx - w / 2 + 6, baseY - d * .6, w + 2, d * .6 + 6);
+  ctx.lineWidth = 2; ctx.strokeStyle = WP.outline; ctx.lineJoin = 'round';
+  ctx.fillStyle = front; ctx.fillRect(cx - w / 2, baseY - h, w, h); ctx.strokeRect(cx - w / 2, baseY - h, w, h);
+  ctx.fillStyle = top; ctx.fillRect(cx - w / 2, baseY - h - d, w, d); ctx.strokeRect(cx - w / 2, baseY - h - d, w, d);
+  return {x0: cx - w / 2, x1: cx + w / 2, front: baseY - h, top: baseY - h - d};
+}
+
+/* ---------- world drawing ---------- */
+function drawGround(v){
+  ctx.fillStyle = WP.grass; ctx.fillRect(v.x0, v.y0, v.x1 - v.x0, v.y1 - v.y0);
+  const i0 = Math.floor(v.x0 / T), i1 = Math.ceil(v.x1 / T), j0 = Math.floor(v.y0 / T), j1 = Math.ceil(v.y1 / T);
+  if ((i1 - i0) * (j1 - j0) > 9000) return;
+  for (let j = j0; j < j1; j++) for (let i = i0; i < i1; i++) {
+    const h = hash(i, j);
+    if (h < .3) { ctx.fillStyle = WP.grassD; ctx.fillRect(i * T, j * T, T, T); }
+    else if (h > .82) { ctx.fillStyle = WP.grassL; ctx.fillRect(i * T, j * T, T, T); }
+    if (cam.z > .6 && h > .5 && h < .56) {
+      ctx.fillStyle = WP.tuft; const x = i * T + 10, y = j * T + 20;
+      ctx.fillRect(x, y, 2, 6); ctx.fillRect(x + 4, y - 3, 2, 9); ctx.fillRect(x + 8, y + 1, 2, 5);
+    }
+  }
+}
+function drawDecor(v, now){
+  for (const d of decor) {
+    if (d.x < v.x0 - 40 || d.x > v.x1 + 40 || d.y < v.y0 - 40 || d.y > v.y1 + 60) continue;
+    if (d.t === 'flower') {
+      if (cam.z < .55) continue;
+      ctx.fillStyle = WP.flower[d.c]; ctx.fillRect(d.x - 2, d.y - 2, 4, 4); ctx.fillRect(d.x + 5, d.y + 3, 3, 3); ctx.fillRect(d.x - 6, d.y + 4, 3, 3);
+      continue;
+    }
+    if (d.t === 'rock') {
+      ctx.fillStyle = WP.shadow; ctx.beginPath(); ctx.ellipse(d.x + 3, d.y + 4, 10 * d.s, 5 * d.s, 0, 0, 7); ctx.fill();
+      ctx.beginPath(); ctx.ellipse(d.x, d.y, 10 * d.s, 7 * d.s, 0, 0, 7); fillStroke(WP.rock);
+      continue;
+    }
+    const s = d.s, sway = reduced ? 0 : Math.sin(now / 1400 + d.x * .05) * 1.5;
+    ctx.fillStyle = WP.shadow; ctx.beginPath(); ctx.ellipse(d.x + 5, d.y + 4, 16 * s, 7 * s, 0, 0, 7); ctx.fill();
+    if (d.t === 'tree') {
+      ctx.fillStyle = WP.trunk; ctx.fillRect(d.x - 3 * s, d.y - 14 * s, 6 * s, 16 * s);
+      ctx.lineWidth = 2; ctx.strokeStyle = WP.outline; ctx.strokeRect(d.x - 3 * s, d.y - 14 * s, 6 * s, 16 * s);
+      ctx.beginPath(); ctx.arc(d.x + sway, d.y - 26 * s, 17 * s, 0, 7); fillStroke(WP.treeD);
+      ctx.beginPath(); ctx.arc(d.x - 6 * s + sway, d.y - 30 * s, 11 * s, 0, 7); ctx.fillStyle = WP.tree; ctx.fill();
+      ctx.beginPath(); ctx.arc(d.x - 8 * s + sway, d.y - 34 * s, 5 * s, 0, 7); ctx.fillStyle = WP.treeL; ctx.fill();
+    } else {
+      ctx.beginPath(); ctx.arc(d.x, d.y - 6 * s, 11 * s, 0, 7); fillStroke(WP.treeD);
+      ctx.beginPath(); ctx.arc(d.x - 3 * s, d.y - 9 * s, 6 * s, 0, 7); ctx.fillStyle = WP.tree; ctx.fill();
+    }
+  }
+}
+
+function drawPlot(sys, i, now, v){
+  const g = geom(sys, i);
+  if (g.x0 + g.w + 2 * T < v.x0 || g.x0 - 2 * T > v.x1 || g.y0 + g.h + T < v.y0 || g.y0 - 2 * T > v.y1) return;
+  const today = dayKey(), showLabels = cam.z >= .5;
+  // paved yard
+  const py = g.y0 + 2.6 * T, ph = 6 * T;
+  ctx.fillStyle = WP.curb; rrect(g.x0, py + 5, g.w, ph, 12); ctx.fill();
+  ctx.fillStyle = WP.pave; rrect(g.x0, py, g.w, ph, 12); ctx.fill();
+  ctx.save(); rrect(g.x0, py, g.w, ph, 12); ctx.clip();
+  ctx.fillStyle = WP.paveD;
+  for (let x = g.x0 + T; x < g.x0 + g.w; x += T) ctx.fillRect(x, py, 1, ph);
+  for (let y = py + T; y < py + ph; y += T) ctx.fillRect(g.x0, y, g.w, 1);
+  ctx.restore();
+  ctx.lineWidth = 2; ctx.strokeStyle = WP.outline; rrect(g.x0, py, g.w, ph, 12); ctx.stroke();
+
+  // ore deposit under the extractor
+  const ox = g.xs[0], oy = g.beltY + .2 * T;
+  ctx.beginPath(); ctx.ellipse(ox, oy, 2.1 * T, 1.5 * T, 0, 0, 7); ctx.fillStyle = WP.dirt; ctx.fill();
+  ctx.beginPath(); ctx.ellipse(ox, oy + 4, 2.1 * T, 1.5 * T, 0, 0, Math.PI); ctx.strokeStyle = WP.dirtD; ctx.lineWidth = 3; ctx.stroke();
+  for (let k = 0; k < 14; k++) {
+    const a = hash(i, k) * Math.PI * 2, r = (.4 + hash(k, i + 4) * .6);
+    const nx = ox + Math.cos(a) * r * 1.8 * T, ny = oy + Math.sin(a) * r * 1.2 * T;
+    ctx.beginPath(); ctx.moveTo(nx, ny - 6); ctx.lineTo(nx + 6, ny); ctx.lineTo(nx, ny + 5); ctx.lineTo(nx - 6, ny); ctx.closePath();
+    fillStroke(sys.hue, 1.5);
+    ctx.fillStyle = 'rgba(255,255,255,.55)'; ctx.fillRect(nx - 2, ny - 3, 3, 2);
+  }
+
+  // belt: the motto moves everything
+  const bx0 = g.xs[0], bx1 = g.xs[g.n], by = g.beltY, bh = .78 * T;
+  ctx.fillStyle = WP.shadow; ctx.fillRect(bx0, by - bh / 2 + 6, bx1 - bx0, bh);
+  ctx.fillStyle = WP.rail; ctx.fillRect(bx0, by - bh / 2, bx1 - bx0, bh);
+  ctx.fillStyle = WP.belt; ctx.fillRect(bx0, by - bh / 2 + 4, bx1 - bx0, bh - 8);
+  const off = reduced ? 0 : (now / 1000 * BELT_SPEED * T) % 16;
+  ctx.fillStyle = WP.chev;
+  for (let x = bx0 - 16 + off; x < bx1; x += 16) { if (x < bx0) continue; ctx.fillRect(x, by - bh / 2 + 1, 6, 2); ctx.fillRect(x, by + bh / 2 - 3, 6, 2); }
+  if (cam.z > .55) {
+    ctx.save(); ctx.beginPath(); ctx.rect(bx0, by - bh / 2 + 4, bx1 - bx0, bh - 8); ctx.clip();
+    ctx.font = F(500, 12); ctx.fillStyle = WP.mottoInk; ctx.textBaseline = 'middle';
+    const motto = sys.motto + '   •   ';
+    const mw = Math.max(60, ctx.measureText(motto).width);
+    const toff = reduced ? 0 : (now / 1000 * BELT_SPEED * T) % mw;
+    for (let x = bx0 - mw + toff; x < bx1; x += mw) ctx.fillText(motto, x, by + 1);
+    ctx.restore(); ctx.textBaseline = 'alphabetic';
+  }
+
+  // units on the belt (buildings drawn after hide the ones inside)
+  for (const it of state.items) {
+    if (it.sys !== sys.id || it.f < 0) continue;
+    const x = bx0 + it.f * (bx1 - bx0);
+    if (x < v.x0 - 20 || x > v.x1 + 20) continue;
+    const r = 6 + Math.min(6, ((it.mult || 1) - 1) * 3.5);
+    ctx.fillStyle = 'rgba(0,0,0,.25)'; ctx.beginPath(); ctx.ellipse(x + 2, by + 5, r, r * .45, 0, 0, 7); ctx.fill();
+    shapePath(ctx, it.shape, x, by - 2, r); fillStroke(sys.hue, 2);
+    ctx.fillStyle = 'rgba(255,255,255,.5)'; ctx.fillRect(x - r * .4, by - 2 - r * .5, r * .35, r * .25);
+    itemHits.push({x, y: by - 2, r: r + 8, id: it.id});
+  }
+
+  // stations
+  const labelQueue = [];
+  sys.stations.forEach((st, k) => {
+    const kind = k === 0 ? 'ext' : KINDS[(k - 1) % KINDS.length];
+    const b = drawStation(kind, g.xs[k], g.base, st, sys, k, now);
+    hits.push({x0: b.x0 - 6, y0: b.top - 28, x1: b.x1 + 6, y1: g.base + 1.6 * T, sys: sys.id, st: st.id});
+    labelQueue.push({x: g.xs[k], st, k});
+  });
+  const vb = drawVault(g.xs[g.n], g.base, sys);
+  hits.push({x0: vb.x0 - 6, y0: vb.top - 34, x1: vb.x1 + 6, y1: g.base + 1.6 * T, sys: sys.id, st: null});
+
+  // followed unit ring (shows even inside a building)
+  if (cam.follow) {
+    const it = state.items.find(t => t.id === cam.follow && t.sys === sys.id);
+    if (it) {
+      const x = bx0 + Math.max(0, it.f) * (bx1 - bx0), pr = 14 + Math.sin(now / 200) * 2;
+      ctx.lineWidth = 3; ctx.strokeStyle = COL.hl; ctx.beginPath(); ctx.arc(x, by - 2, pr, 0, 7); ctx.stroke();
+      ctx.lineWidth = 1.5; ctx.strokeStyle = WP.outline; ctx.beginPath(); ctx.arc(x, by - 2, pr + 2.5, 0, 7); ctx.stroke();
+    }
+  }
+
+  // labels
+  if (showLabels) {
+    for (const {x, st, k} of labelQueue) {
+      const done = st.last === today;
+      ctx.font = F(600, 13);
+      let name = st.name; const maxW = 4.4 * T;
+      while (ctx.measureText(name).width > maxW && name.length > 3) name = name.slice(0, -2);
+      if (name !== st.name) name = name.trimEnd() + '…';
+      const label = (done ? '✓ ' : '') + name;
+      const tw = ctx.measureText(label).width;
+      const ly = g.base + .55 * T;
+      rrect(x - tw / 2 - 8, ly, tw + 16, 22, 11); fillStroke(done ? COL.hl : WP.plate, 2);
+      ctx.fillStyle = done ? '#1f2a2e' : WP.text; ctx.textAlign = 'center';
+      ctx.fillText(label, x, ly + 15.5);
+      ctx.font = F(400, 11, 'display'); ctx.fillStyle = WP.night ? WP.text : WP.text;
+      const sub = k === 0 ? `mines ${sys.resource}` : `${fmtX(machineMult(st))} · ${st.runs} run${st.runs === 1 ? '' : 's'}`;
+      ctx.globalAlpha = .8; ctx.fillText(sub, x, ly + 38); ctx.globalAlpha = 1;
+      ctx.textAlign = 'left';
+    }
+    ctx.font = F(600, 13); ctx.textAlign = 'center';
+    const vlabel = `Vault · ${fmtPts(sys.delivered)} / ${sys.target}`;
+    const vw = ctx.measureText(vlabel).width, vx = g.xs[g.n], vly = g.base + .55 * T;
+    rrect(vx - vw / 2 - 8, vly, vw + 16, 22, 11); fillStroke(WP.plate, 2);
+    ctx.fillStyle = WP.text; ctx.fillText(vlabel, vx, vly + 15.5);
+    ctx.textAlign = 'left';
+  }
+
+  drawSign(sys, g);
+  hits.push({x0: g.x0 + .4 * T, y0: g.y0 + .1 * T, x1: g.x0 + .4 * T + signW(g), y1: g.y0 + 2.4 * T, sys: sys.id, st: null});
+}
+const signW = g => Math.min(g.w - T, 12 * T);
+function drawSign(sys, g){
+  const x = g.x0 + .4 * T, y = g.y0 + .15 * T, w = signW(g), h = 1.9 * T;
+  // posts
+  ctx.fillStyle = WP.woodD; ctx.fillRect(x + 16, y + h - 4, 7, .7 * T); ctx.fillRect(x + w - 23, y + h - 4, 7, .7 * T);
+  ctx.fillStyle = WP.shadow; ctx.fillRect(x + 6, y + 8, w, h);
+  rrect(x, y, w, h, 10); fillStroke(WP.plate, 2.5);
+  ctx.fillStyle = sys.hue; rrect(x + 10, y + 12, 14, 14, 7); ctx.fill(); ctx.lineWidth = 2; ctx.strokeStyle = WP.outline; ctx.stroke();
+  ctx.fillStyle = WP.text; ctx.font = F(700, 20, 'display');
+  ctx.fillText(sys.name.toUpperCase(), x + 32, y + 26);
+  const nw = ctx.measureText(sys.name.toUpperCase()).width;
+  ctx.font = F(600, 15, 'display'); ctx.fillStyle = sys.hue;
+  const mtext = fmtX(lineMult(sys)) + ' a unit';
+  ctx.fillText(mtext, x + 42 + nw, y + 25);
+  ctx.font = F(500, 13); ctx.fillStyle = WP.soft;
+  let goal = 'Goal: ' + sys.goal; const gmax = w - 20 - 70;
+  while (ctx.measureText(goal).width > gmax && goal.length > 8) goal = goal.slice(0, -2);
+  if (goal !== 'Goal: ' + sys.goal) goal = goal.trimEnd() + '…';
+  ctx.fillText(goal, x + 12, y + 46);
+  const pct = Math.min(1, sys.delivered / sys.target);
+  const bx = x + w - 66, bw = 54;
+  rrect(bx, y + 36, bw, 12, 6); fillStroke(WP.white === '#ffffff' ? '#eeeae0' : '#11171a', 2);
+  if (pct > 0) { ctx.fillStyle = sys.hue; rrect(bx + 2, y + 38, Math.max(6, (bw - 4) * pct), 8, 4); ctx.fill(); }
+  ctx.font = F(600, 11, 'display'); ctx.fillStyle = WP.text; ctx.textAlign = 'right';
+  ctx.fillText(Math.round(pct * 100) + '%', x + w - 12, y + 30); ctx.textAlign = 'left';
+}
+
+function drawStation(kind, cx, baseY, st, sys, k, now){
+  const lvl = st.level, s = 1 + .07 * (lvl - 1);
+  const hue = sys.hue;
+  const roof = WP.night ? mix(hue, '#000000', .25) : mix(hue, '#ffffff', .25);
+  const roofD = mix(hue, '#000000', .3);
+  const wall = WP.wall;
+  const active = st.charge > 0;
+  const bumpT = st._bump ? (now - st._bump) / 450 : 1;
+  const bump = bumpT < 1 && !reduced ? Math.sin(bumpT * Math.PI) * 5 : 0;
+  baseY -= bump;
+  let w = 2.3 * T * s, d = 1.05 * T, b, smoke = null, badgeY;
+  const winColor = (on) => on && WP.night ? WP.win : on ? mix(hue, '#ffffff', .55) : WP.win;
+  switch (kind) {
+    case 'ext': {
+      b = box(cx, baseY, w, d, .55 * T, wall, roof);
+      const topY = b.top + d * .55;
+      const recent = st._bump && now - st._bump < 4000;
+      const speed = recent ? 170 : 700;
+      const bob = reduced ? 0 : Math.sin(now / speed) * .22 * T;
+      ctx.lineWidth = 4; ctx.strokeStyle = WP.outline; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(cx - .55 * T, topY); ctx.lineTo(cx, topY - 1.25 * T * s); ctx.lineTo(cx + .55 * T, topY); ctx.stroke();
+      ctx.lineWidth = 2.5; ctx.strokeStyle = WP.wallD;
+      ctx.beginPath(); ctx.moveTo(cx - .55 * T, topY); ctx.lineTo(cx, topY - 1.25 * T * s); ctx.lineTo(cx + .55 * T, topY); ctx.stroke();
+      const py = topY - 1.25 * T * s;
+      ctx.lineWidth = 7; ctx.strokeStyle = WP.outline; ctx.beginPath(); ctx.moveTo(cx - .95 * T, py + bob); ctx.lineTo(cx + .95 * T, py - bob); ctx.stroke();
+      ctx.lineWidth = 4; ctx.strokeStyle = hue; ctx.beginPath(); ctx.moveTo(cx - .95 * T, py + bob); ctx.lineTo(cx + .95 * T, py - bob); ctx.stroke();
+      ctx.beginPath(); ctx.arc(cx - .95 * T, py + bob + 3, 7, 0, 7); fillStroke(roofD);
+      ctx.beginPath(); ctx.arc(cx, py, 4, 0, 7); fillStroke(COL.hl);
+      ctx.lineCap = 'butt';
+      ctx.fillStyle = WP.outline; ctx.fillRect(cx - w * .3, b.front + 6, w * .6, 4);
+      badgeY = null;
+      break;
+    }
+    case 'factory': {
+      b = box(cx, baseY, w, d, .9 * T * s, wall, roof);
+      // sawtooth roof
+      const teeth = 4, tw = w / teeth;
+      for (let t = 0; t < teeth; t++) {
+        const tx = b.x0 + t * tw;
+        ctx.beginPath(); ctx.moveTo(tx, b.front); ctx.lineTo(tx, b.front - d * .9); ctx.lineTo(tx + tw, b.front); ctx.closePath(); fillStroke(roofD);
+        ctx.fillStyle = winColor(active); ctx.fillRect(tx + 3, b.front - d * .9 + 8, 3, d * .9 - 14);
+      }
+      for (let wi = 0; wi < 3; wi++) { const wx = b.x0 + 8 + wi * (w - 16) / 3; ctx.fillStyle = winColor(active); ctx.fillRect(wx, b.front + 6, (w - 16) / 3 - 6, 8); ctx.strokeStyle = WP.outline; ctx.lineWidth = 1.5; ctx.strokeRect(wx, b.front + 6, (w - 16) / 3 - 6, 8); }
+      // chimney
+      const chx = b.x1 - .55 * T, chTop = b.top - .9 * T * s;
+      ctx.fillStyle = WP.wallD; ctx.fillRect(chx - 8, chTop, 16, b.front - chTop - d * .4); ctx.lineWidth = 2; ctx.strokeStyle = WP.outline; ctx.strokeRect(chx - 8, chTop, 16, b.front - chTop - d * .4);
+      ctx.fillStyle = hue; ctx.fillRect(chx - 8, chTop + 6, 16, 5);
+      smoke = {x: chx, y: chTop};
+      badgeY = b.front + (baseY - b.front) * .62;
+      break;
+    }
+    case 'press': {
+      b = box(cx, baseY, w, d, .8 * T * s, wall, roof);
+      ctx.beginPath(); ctx.moveTo(b.x0 - 4, b.front); ctx.lineTo(b.x0 + w * .18, b.top - .45 * T * s); ctx.lineTo(b.x1 - w * .18, b.top - .45 * T * s); ctx.lineTo(b.x1 + 4, b.front); ctx.closePath(); fillStroke(roof);
+      ctx.fillStyle = roofD; ctx.fillRect(b.x0 + w * .18, b.top - .45 * T * s, w * .64, 4);
+      ctx.fillStyle = WP.outline; ctx.fillRect(cx - 9, baseY - .5 * T, 18, .5 * T);
+      smoke = {x: cx, y: b.top - .45 * T * s};
+      badgeY = b.front + 12;
+      break;
+    }
+    case 'tower': {
+      w = 1.5 * T * s;
+      b = box(cx, baseY, w, d * .9, 1.7 * T * s, wall, roof);
+      ctx.fillStyle = hue; ctx.fillRect(b.x0 + 1, b.front + 10, w - 2, 7); ctx.strokeStyle = WP.outline; ctx.lineWidth = 1.5; ctx.strokeRect(b.x0 + 1, b.front + 10, w - 2, 7);
+      for (let r = 0; r < 3; r++) { ctx.fillStyle = winColor(active); ctx.fillRect(cx - 5, b.front + 24 + r * 9, 10, 5); }
+      ctx.lineWidth = 3; ctx.strokeStyle = WP.outline; ctx.beginPath(); ctx.moveTo(cx, b.top + 4); ctx.lineTo(cx, b.top - .7 * T); ctx.stroke();
+      const blink = reduced || Math.floor(now / 600) % 2 === 0;
+      ctx.beginPath(); ctx.arc(cx, b.top - .7 * T, 4.5, 0, 7); fillStroke(blink && active ? COL.hl : roofD);
+      smoke = {x: cx + 8, y: b.top};
+      badgeY = baseY - 14;
+      break;
+    }
+    case 'dome': {
+      b = box(cx, baseY, w, d, .55 * T * s, wall, roof);
+      const r = w * .34, dy = b.front - d * .25;
+      ctx.beginPath(); ctx.arc(cx, dy, r, Math.PI, 0); ctx.closePath(); fillStroke(roof);
+      ctx.fillStyle = winColor(active); ctx.fillRect(cx - 3, dy - r + 6, 6, r - 8);
+      ctx.fillStyle = 'rgba(255,255,255,.35)'; ctx.beginPath(); ctx.arc(cx - r * .4, dy - r * .45, r * .18, 0, 7); ctx.fill();
+      smoke = {x: cx + r * .6, y: dy - r * .6};
+      badgeY = b.front + (baseY - b.front) * .55;
+      break;
+    }
+    default: { // silos
+      const sh = 1.5 * T * s, sw = .8 * T * s;
+      ctx.fillStyle = WP.shadow; ctx.fillRect(cx - w / 2 + 6, baseY - d * .6, w + 2, d * .6 + 6);
+      for (const ox of [-w * .24, w * .24]) {
+        const x = cx + ox;
+        ctx.fillStyle = wall; ctx.fillRect(x - sw / 2, baseY - sh, sw, sh);
+        ctx.lineWidth = 2; ctx.strokeStyle = WP.outline; ctx.strokeRect(x - sw / 2, baseY - sh, sw, sh);
+        ctx.fillStyle = hue; ctx.fillRect(x - sw / 2 + 1, baseY - sh * .55, sw - 2, 5);
+        ctx.beginPath(); ctx.ellipse(x, baseY - sh, sw / 2, sw * .28, 0, 0, 7); fillStroke(roof);
+      }
+      ctx.fillStyle = WP.wallD; ctx.fillRect(cx - 8, baseY - sh * .8, 16, 6); ctx.strokeStyle = WP.outline; ctx.lineWidth = 1.5; ctx.strokeRect(cx - 8, baseY - sh * .8, 16, 6);
+      b = {x0: cx - w / 2, x1: cx + w / 2, front: baseY - sh, top: baseY - sh - sw * .28};
+      smoke = {x: cx - w * .24, y: b.top};
+      badgeY = baseY - sh * .3;
+    }
+  }
+  // output badge
+  if (badgeY != null) {
+    const shp = outputShape(k - 1, sys.stations.length - 1);
+    const bx = kind === 'silo' ? cx - w * .24 : cx;
+    ctx.beginPath(); ctx.arc(bx, badgeY, 9, 0, 7); fillStroke(WP.plate, 2);
+    shapePath(ctx, shp, bx, badgeY, 5.5); ctx.fillStyle = hue; ctx.fill();
+  }
+  // level pips
+  for (let l = 0; l < lvl; l++) {
+    const px = b.x0 + 6 + l * 9, py = b.top + 5;
+    ctx.beginPath(); ctx.moveTo(px, py - 4); ctx.lineTo(px + 4, py); ctx.lineTo(px, py + 4); ctx.lineTo(px - 4, py); ctx.closePath(); fillStroke(COL.hl, 1.5);
+  }
+  // flag from level 3
+  if (lvl >= 3) {
+    const fx = b.x1 - 8, fy = b.top - 22, wave = reduced ? 0 : Math.sin(now / 280 + k) * 2;
+    ctx.fillStyle = WP.outline; ctx.fillRect(fx, fy, 2, 24);
+    ctx.beginPath(); ctx.moveTo(fx + 2, fy); ctx.lineTo(fx + 15, fy + 4 + wave); ctx.lineTo(fx + 2, fy + 9); ctx.closePath(); fillStroke(lvl >= 5 ? COL.hl : hue, 1.5);
+  }
+  // stored charge
+  if (k > 0 && active) {
+    const n = Math.min(st.charge, 6), cw = 6, gap = 2, tw = n * (cw + gap) - gap;
+    const cy = baseY + 4;
+    for (let c = 0; c < n; c++) { ctx.fillStyle = WP.outline; ctx.fillRect(cx - tw / 2 + c * (cw + gap) - 1, cy - 1, cw + 2, 8); ctx.fillStyle = COL.hl; ctx.fillRect(cx - tw / 2 + c * (cw + gap), cy, cw, 6); }
+    if (st.charge > 6) { ctx.font = F(600, 11, 'display'); ctx.fillStyle = WP.text; ctx.fillText('+' + (st.charge - 6), cx + tw / 2 + 4, cy + 7); }
+    if (smoke && !reduced) {
+      for (let p = 0; p < 4; p++) {
+        const ph = ((now / 2000) + p / 4) % 1;
+        ctx.globalAlpha = (1 - ph) * .9;
+        ctx.beginPath(); ctx.arc(smoke.x + Math.sin(ph * 5 + p) * 5 + ph * 10, smoke.y - 4 - ph * 34, 4 + ph * 8, 0, 7); ctx.fillStyle = WP.smoke; ctx.fill();
+      }
+      ctx.globalAlpha = 1;
+    }
+  }
+  return b;
+}
+
+function drawVault(cx, baseY, sys){
+  const w = 2.9 * T, d = 1.15 * T, h = 1.25 * T;
+  const roof = WP.night ? mix(sys.hue, '#000000', .25) : mix(sys.hue, '#ffffff', .25);
+  const b = box(cx, baseY, w, d, h, WP.wall, roof);
+  // roof stripes
+  ctx.fillStyle = mix(sys.hue, '#000000', .25);
+  for (let x = b.x0 + 8; x < b.x1 - 4; x += 12) ctx.fillRect(x, b.top + 3, 4, d - 6);
+  // door
+  ctx.fillStyle = WP.outline; ctx.fillRect(cx - 12, baseY - .75 * T, 24, .75 * T);
+  ctx.fillStyle = WP.wallD; for (let y = baseY - .75 * T + 4; y < baseY; y += 5) ctx.fillRect(cx - 10, y, 20, 2);
+  // gauge: fills toward the goal
+  const pct = Math.min(1, sys.delivered / sys.target);
+  const gx = b.x0 + 10, gy = b.front + 6, gw = 14, gh = h - 12;
+  ctx.fillStyle = WP.night ? '#11171a' : '#f7f3ea'; ctx.fillRect(gx, gy, gw, gh);
+  ctx.fillStyle = sys.hue; ctx.fillRect(gx, gy + gh * (1 - pct), gw, gh * pct);
+  ctx.lineWidth = 2; ctx.strokeStyle = WP.outline; ctx.strokeRect(gx, gy, gw, gh);
+  // star sign
+  shapePath(ctx, 'star', b.x1 - 20, b.front + h * .45, 11); fillStroke(sys.reached ? COL.hl : sys.hue, 2);
+  // counter plate
+  ctx.font = F(700, 15, 'display');
+  const txt = fmtPts(sys.delivered);
+  const tw = ctx.measureText(txt).width;
+  rrect(cx - tw / 2 - 8, b.top - 26, tw + 16, 22, 6); fillStroke(WP.plate, 2);
+  ctx.fillStyle = WP.text; ctx.textAlign = 'center'; ctx.fillText(txt, cx, b.top - 10); ctx.textAlign = 'left';
+  return b;
+}
+
+let popups = [];
+function drawPopups(dt){
+  popups = popups.filter(p => (p.t += dt) < 1.5);
+  ctx.textAlign = 'center';
+  for (const p of popups) {
+    ctx.globalAlpha = 1 - p.t / 1.5;
+    ctx.font = F(700, 16, 'display');
+    ctx.lineWidth = 4; ctx.strokeStyle = WP.outline; ctx.strokeText(p.text, p.x, p.y - p.t * 34);
+    ctx.fillStyle = COL.hl; ctx.fillText(p.text, p.x, p.y - p.t * 34);
+  }
+  ctx.globalAlpha = 1; ctx.textAlign = 'left';
+}
+function drawEmpty(){
+  ctx.fillStyle = WP.text; ctx.font = F(600, 20);
+  ctx.textAlign = 'center';
+  ctx.fillText('Empty land. Open the library to build your first plot.', 0, 0);
+  ctx.textAlign = 'left';
+}
+
+function drawMini(){
+  const d = DPR(), mw = mini.width / d, mh = mini.height / d;
+  if (!mw) return;
+  const b = worldBounds();
+  const s = Math.min(mw / (b.x1 - b.x0), mh / (b.y1 - b.y0));
+  const ox = (mw - (b.x1 - b.x0) * s) / 2 - b.x0 * s, oy = (mh - (b.y1 - b.y0) * s) / 2 - b.y0 * s;
+  mctx.setTransform(d, 0, 0, d, 0, 0);
+  mctx.clearRect(0, 0, mw, mh);
+  mctx.fillStyle = WP.grass; mctx.fillRect(0, 0, mw, mh);
+  state.systems.forEach((sys, i) => {
+    const g = geom(sys, i);
+    mctx.fillStyle = WP.pave; mctx.fillRect(ox + g.x0 * s, oy + (g.y0 + 2.6 * T) * s, g.w * s, 6 * T * s);
+    mctx.fillStyle = sys.hue; mctx.fillRect(ox + g.xs[0] * s, oy + g.beltY * s - 1.5, (g.xs[g.n] - g.xs[0]) * s, 3);
+    mctx.fillStyle = WP.outline; mctx.fillRect(ox + g.x0 * s, oy + (g.y0 + .2 * T) * s, Math.min(g.w, 12 * T) * s, 2);
+  });
+  mctx.fillStyle = COL.hl;
+  for (const it of state.items) { const p = itemPos(it); if (p && it.f >= 0) mctx.fillRect(ox + p[0] * s - 1, oy + p[1] * s - 1, 2.5, 2.5); }
+  mctx.strokeStyle = WP.night ? '#ffffff' : '#1f2a2e'; mctx.lineWidth = 2;
+  mctx.strokeRect(ox + (cam.x - W / 2 / cam.z) * s, oy + (cam.y - H / 2 / cam.z) * s, W / cam.z * s, H / cam.z * s);
+  mini._map = {s, ox, oy};
+}
+
+/* ---------- main loop ---------- */
+let last = performance.now(), camSaveT = 0;
+const keys = new Set();
+function frame(now){
+  const dt = Math.min(.1, (now - last) / 1000); last = now;
+  if (state) {
+    step(dt);
+    if (view === 'floor') {
+      resize();
+      updateCamera(dt, now);
+      const d = DPR();
+      ctx.setTransform(d, 0, 0, d, 0, 0);
+      ctx.fillStyle = WP.grass; ctx.fillRect(0, 0, W, H);
+      ctx.setTransform(d * cam.z, 0, 0, d * cam.z, d * (W / 2 - cam.x * cam.z), d * (H / 2 - cam.y * cam.z));
+      const v = {x0: cam.x - W / 2 / cam.z, y0: cam.y - H / 2 / cam.z, x1: cam.x + W / 2 / cam.z, y1: cam.y + H / 2 / cam.z};
+      hits = []; itemHits = [];
+      buildDecor();
+      drawGround(v);
+      drawDecor(v, now);
+      if (!state.systems.length) drawEmpty();
+      state.systems.forEach((s, i) => drawPlot(s, i, now, v));
+      drawPopups(dt);
+      drawMini();
+      if (cam.follow && now - lastPill > 300) { lastPill = now; renderFollowPill(); }
+      if (now - camSaveT > 2000) { camSaveT = now; saveCam(); }
+    }
+    tickTimer();
+  }
+  requestAnimationFrame(frame);
+}
+function updateCamera(dt, now){
+  if (keys.size && !cam.follow) {
+    const sp = 700 / cam.z * dt;
+    if (keys.has('left')) cam.x -= sp; if (keys.has('right')) cam.x += sp;
+    if (keys.has('up')) cam.y -= sp; if (keys.has('down')) cam.y += sp;
+    clampCam(); settle();
+  }
+  if (cam.follow) {
+    const it = state.items.find(t => t.id === cam.follow);
+    if (!it) {
+      const next = state.items.filter(t => t.sys === cam.followSys).sort((a, b) => b.f - a.f)[0];
+      if (next) startFollow(next); else stopFollow();
+    } else { const p = itemPos(it); cam.tx = p[0]; cam.ty = p[1]; }
+  }
+  if (cam.follow || cam.anim) {
+    const k = 1 - Math.exp(-dt * 5);
+    cam.x += (cam.tx - cam.x) * k; cam.y += (cam.ty - cam.y) * k; cam.z += (cam.tz - cam.z) * k;
+    if (cam.anim && Math.abs(cam.tx - cam.x) < .5 && Math.abs(cam.ty - cam.y) < .5 && Math.abs(cam.tz - cam.z) < .002) { cam.x = cam.tx; cam.y = cam.ty; cam.z = cam.tz; cam.anim = false; }
+  }
+}
+
+/* ---------- simulation ---------- */
+function step(dt){
+  if (!state.items.length) return;
+  let changed = false;
+  const bySys = new Map(state.systems.map((s, i) => [s.id, {s, i}]));
+  const keep = [];
+  for (const it of state.items) {
+    const e = bySys.get(it.sys);
+    if (!e) { changed = true; continue; }
+    const {s, i} = e, g = geom(s, i);
+    it.f += dt * BELT_SPEED * T / (g.xs[g.n] - g.xs[0]);
+    while (it.next < s.stations.length && it.f >= beltFrac(g, it.next)) {
+      const st = s.stations[it.next];
+      if (st.charge > 0) { st.charge--; it.shaped++; it.mult = (it.mult || 1) * machineMult(st); it.shape = outputShape(it.next - 1, s.stations.length - 1); }
+      it.next++; changed = true;
+    }
+    if (it.f >= 1) {
+      const val = it.mult || 1;
+      const before = s.delivered;
+      s.delivered += val;
+      const h = histFor(s); h.p += val; h.m = lineMult(s);
+      popups.push({x: g.xs[g.n], y: g.base - 2.6 * T + (popups.length % 3) * 6, text: '+' + fmtPts(val), t: 0});
+      if (cam.follow === it.id) toast(`Delivered to the ${s.name} vault: +${fmtPts(val)} points.`);
+      if (!s.reached && before < s.target && s.delivered >= s.target) {
+        s.reached = true;
+        toast(`${s.name}: goal reached. Your system got you there. Raise the target and keep the line running.`, 7000);
+      }
+      changed = true;
+      continue;
+    }
+    keep.push(it);
+  }
+  state.items = keep;
+  if (changed) { save(); if (sel) updateLive(); }
+}
+
+function markDay(){
+  const t = dayKey();
+  if (state.lastDay !== t) { state.days++; state.lastDay = t; }
+}
+function histFor(sys){
+  state.hist = state.hist || {};
+  const day = state.hist[dayKey()] = state.hist[dayKey()] || {};
+  return day[sys.id] = day[sys.id] || {r: 0, p: 0, m: lineMult(sys)};
+}
+function runStation(sys, st, extraCogs = 0, quiet = false){
+  const k = sys.stations.indexOf(st);
+  if (st.last !== dayKey()) st.days = (st.days || 0) + 1;   // 1% better, once per day
+  st.runs++; st.last = dayKey(); st._bump = performance.now();
+  const h = histFor(sys); h.r++; h.m = lineMult(sys);
+  state.votes++; markDay();
+  const cogs = 1 + extraCogs;
+  state.cogs += cogs;
+  let msg;
+  if (k === 0) {
+    const n = st.level;
+    const startQ = Math.min(0, ...state.items.filter(i => i.sys === sys.id).map(i => i.f));
+    const made = [];
+    for (let j = 0; j < n; j++) { const it = {id: uid(), sys: sys.id, f: Math.min(0, startQ) - j * .05 - (startQ < 0 ? .05 : 0), shape: 'circle', shaped: 0, mult: 1, next: 1}; state.items.push(it); made.push(it); }
+    msg = `${st.name}: mined ${n} ${sys.resource} onto the belt. +${cogs} cog${cogs > 1 ? 's' : ''}.`;
+    if (view === 'floor' && !quiet) startFollow(made[0]);
+  } else {
+    const c = st.level + 1;
+    st.charge += c;
+    msg = `${st.name}: +${c} charge at ${fmtX(machineMult(st))}. The line now multiplies each unit by ${fmtX(lineMult(sys))}. +${cogs} cog${cogs > 1 ? 's' : ''}.`;
+  }
+  const g = geom(sys, state.systems.indexOf(sys));
+  popups.push({x: g.xs[k], y: g.base - 2.4 * T, text: '+1 vote', t: 0});
+  if (!quiet) toast(msg);
+  refreshStats(); save();
+}
+const upgradeCost = l => l * 4;
+
+/* ---------- UI: stats, toast, line jump ---------- */
+function refreshStats(){
+  $('#s-cogs').textContent = state.cogs;
+  $('#s-votes').textContent = state.votes;
+  $('#s-days').textContent = state.days;
+  $('#b-quiz').textContent = state.checkinDay === dayKey() ? 'Checked in today ✓' : 'Daily check-in';
+}
+function renderJump(){
+  $('#jump').innerHTML = state.systems.map((s, i) => `<button class="jump" data-i="${i}"><i style="background:${s.hue}"></i>${esc(s.name)}</button>`).join('');
+}
+$('#jump').addEventListener('click', e => { const b = e.target.closest('[data-i]'); if (b) flyToPlot(+b.dataset.i); });
+let toastTimer;
+function toast(msg, ms = 4200){
+  const t = $('#toast'); t.textContent = msg; t.hidden = false;
+  clearTimeout(toastTimer); toastTimer = setTimeout(() => t.hidden = true, ms);
+}
+function drawLogo(){
+  const c = $('#logo'), d = DPR();
+  c.width = 32 * d; c.height = 32 * d;
+  const x = c.getContext('2d'); x.setTransform(d, 0, 0, d, 0, 0); x.clearRect(0, 0, 32, 32);
+  x.beginPath();
+  for (let i = 0; i < 16; i++) { const a = i * Math.PI / 8, r = i % 2 ? 11 : 15; x.lineTo(16 + r * Math.cos(a - .2), 16 + r * Math.sin(a - .2)); x.lineTo(16 + r * Math.cos(a + .2), 16 + r * Math.sin(a + .2)); }
+  x.closePath(); x.fillStyle = COL.hl || '#ffd23f'; x.fill(); x.lineWidth = 2.5; x.strokeStyle = COL.ink || '#1f2a2e'; x.stroke();
+  x.beginPath(); x.arc(16, 16, 4.5, 0, 7); x.fillStyle = COL.card || '#fff'; x.fill(); x.stroke();
+}
+
+/* ---------- input: drag, scroll, pinch, keys, click ---------- */
+const pointers = new Map();
+let dragStart = null, pinchStart = null, moved = 0;
+canvas.addEventListener('pointerdown', e => {
+  canvas.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  moved = pointers.size > 1 ? 99 : 0;
+  if (pointers.size === 1) dragStart = {x: e.clientX, y: e.clientY, cx: cam.x, cy: cam.y};
+  if (pointers.size === 2) {
+    const [a, b] = [...pointers.values()];
+    pinchStart = {d: Math.hypot(a.x - b.x, a.y - b.y), z: cam.z};
+  }
+});
+canvas.addEventListener('pointermove', e => {
+  if (!pointers.has(e.pointerId)) {
+    const r = canvas.getBoundingClientRect();
+    canvas.style.cursor = pick(e.clientX - r.left, e.clientY - r.top) ? 'pointer' : 'grab';
+    return;
+  }
+  pointers.set(e.pointerId, {x: e.clientX, y: e.clientY});
+  if (pointers.size === 2 && pinchStart) {
+    const [a, b] = [...pointers.values()];
+    const r = canvas.getBoundingClientRect();
+    const dd = Math.hypot(a.x - b.x, a.y - b.y);
+    zoomAt((a.x + b.x) / 2 - r.left, (a.y + b.y) / 2 - r.top, (pinchStart.z * dd / pinchStart.d) / cam.z);
+    return;
+  }
+  if (dragStart) {
+    const dx = e.clientX - dragStart.x, dy = e.clientY - dragStart.y;
+    moved = Math.max(moved, Math.hypot(dx, dy));
+    if (moved > 5) {
+      if (cam.follow) stopFollow();
+      canvas.classList.add('dragging');
+      cam.x = dragStart.cx - dx / cam.z; cam.y = dragStart.cy - dy / cam.z; clampCam(); settle();
+    }
+  }
+});
+function endPointer(e){
+  const wasClick = pointers.size === 1 && moved <= 5 && dragStart;
+  pointers.delete(e.pointerId);
+  if (pointers.size < 2) pinchStart = null;
+  if (pointers.size === 1) { const p = [...pointers.values()][0]; dragStart = {x: p.x, y: p.y, cx: cam.x, cy: cam.y}; }
+  if (!pointers.size) { dragStart = null; canvas.classList.remove('dragging'); }
+  if (wasClick && e.type === 'pointerup') {
+    const r = canvas.getBoundingClientRect();
+    const h = pick(e.clientX - r.left, e.clientY - r.top);
+    if (h?.item) { const it = state.items.find(t => t.id === h.item); if (it) startFollow(it); }
+    else if (h) openPanel({sys: h.sys, st: h.st});
+  }
+}
+canvas.addEventListener('pointerup', endPointer);
+canvas.addEventListener('pointercancel', endPointer);
+function pick(sx, sy){
+  const [wx, wy] = toWorld(sx, sy);
+  for (const it of itemHits) if (Math.hypot(wx - it.x, wy - it.y) < it.r) return {item: it.id};
+  for (let i = hits.length - 1; i >= 0; i--) { const h = hits[i]; if (wx >= h.x0 && wx <= h.x1 && wy >= h.y0 && wy <= h.y1) return h; }
+  return null;
+}
+canvas.addEventListener('wheel', e => {
+  e.preventDefault();
+  const r = canvas.getBoundingClientRect();
+  const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? H : 1;
+  if (e.ctrlKey || e.metaKey) zoomAt(e.clientX - r.left, e.clientY - r.top, Math.exp(-e.deltaY * unit * .01));
+  else {
+    if (cam.follow) stopFollow();
+    let dx = e.deltaX * unit, dy = e.deltaY * unit;
+    if (e.shiftKey && !dx) { dx = dy; dy = 0; }
+    cam.x += dx / cam.z; cam.y += dy / cam.z; clampCam(); settle();
+  }
+}, {passive: false});
+const KEYMAP = {ArrowLeft: 'left', a: 'left', A: 'left', ArrowRight: 'right', d: 'right', D: 'right', ArrowUp: 'up', w: 'up', W: 'up', ArrowDown: 'down', s: 'down', S: 'down'};
+function typing(e){ return e.target.closest?.('input, textarea, select, [contenteditable]'); }
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { if (!scrim.hidden) closeModal(); else if (sel) closePanel(); else if (cam.follow) stopFollow(); return; }
+  if (view !== 'floor' || !scrim.hidden || typing(e) || e.metaKey || e.ctrlKey || e.altKey) return;
+  if (KEYMAP[e.key]) { if (cam.follow) stopFollow(); keys.add(KEYMAP[e.key]); if (e.key.startsWith('Arrow')) e.preventDefault(); }
+  else if (e.key === '+' || e.key === '=') zoomAt(W / 2, H / 2, 1.2);
+  else if (e.key === '-' || e.key === '_') zoomAt(W / 2, H / 2, 1 / 1.2);
+  else if (e.key === 'f' || e.key === 'F') cam.follow ? stopFollow() : followNearest();
+});
+document.addEventListener('keyup', e => { if (KEYMAP[e.key]) keys.delete(KEYMAP[e.key]); });
+window.addEventListener('blur', () => keys.clear());
+$('#b-zin').addEventListener('click', () => { cam.tz = clamp(cam.z * 1.3, ZMIN, ZMAX); cam.tx = cam.x; cam.ty = cam.y; cam.anim = !cam.follow; });
+$('#b-zout').addEventListener('click', () => { cam.tz = clamp(cam.z / 1.3, ZMIN, ZMAX); cam.tx = cam.x; cam.ty = cam.y; cam.anim = !cam.follow; });
+$('#b-fit').addEventListener('click', fitAll);
+$('#b-follow').addEventListener('click', () => cam.follow ? stopFollow() : followNearest());
+function miniJump(e){
+  const m = mini._map; if (!m) return;
+  const r = mini.getBoundingClientRect();
+  stopFollow();
+  cam.x = (e.clientX - r.left - m.ox) / m.s; cam.y = (e.clientY - r.top - m.oy) / m.s; clampCam(); settle();
+}
+mini.addEventListener('pointerdown', e => { mini.setPointerCapture(e.pointerId); miniJump(e); mini._down = true; });
+mini.addEventListener('pointermove', e => { if (mini._down) miniJump(e); });
+mini.addEventListener('pointerup', () => { mini._down = false; });
+
+/* ---------- panel ---------- */
+let sel = null; // {sys, st}
+const panel = $('#panel');
+const getSys = id => state.systems.find(s => s.id === id);
+function relDay(d){
+  if (!d) return 'not yet';
+  const n = daysBetween(d, dayKey());
+  return n <= 0 ? 'today' : n === 1 ? 'yesterday' : `${n} days ago`;
+}
+function openPanel(s){ sel = s; renderPanel(); }
+function closePanel(){ sel = null; panel.hidden = true; }
+
+function renderPanel(){
+  if (!sel) return closePanel();
+  const sys = getSys(sel.sys); if (!sys) return closePanel();
+  panel.hidden = false;
+  panel.style.setProperty('--sys', sys.hue);
+  if (sel.st) {
+    const st = sys.stations.find(s => s.id === sel.st); if (!st) { sel.st = null; return renderPanel(); }
+    const k = sys.stations.indexOf(st), isEx = k === 0, n = sys.stations.length;
+    const sh = isEx ? 'circle' : outputShape(k - 1, n - 1);
+    const cost = upgradeCost(st.level);
+    const maxed = st.level >= 5;
+    const nextEffect = isEx ? `Level ${st.level + 1} mines ${st.level + 1} units per run.` : `Level ${st.level + 1} adds ${st.level + 2} charge per run and +0.05 to its multiplier.`;
+    const mm = machineMult(st);
+    const tm = state.timer;
+    panel.innerHTML = `
+      <button class="panel-close" data-act="close" aria-label="Close">×</button>
+      <div class="eyebrow"><span class="swatch" style="background:${sys.hue}"></span>${esc(sys.name)} · ${isEx ? 'Extractor' : `Machine ${k} of ${n - 1}`}</div>
+      <input class="title-input" id="st-name" value="${esc(st.name)}" aria-label="Habit name">
+      <p class="desc">${isEx
+        ? `This is the habit everything else depends on. Each run mines <b>${st.level}</b> unit${st.level > 1 ? 's' : ''} of ${esc(sys.resource)} onto the belt, and the camera follows the first one.`
+        : `Each run stores <b>${st.level + 1}</b> charge. Every charge multiplies one passing unit by <b>${fmtX(mm)}</b> and shapes it into a ${SHAPE_GLYPH[sh]}. Each day you run it, the multiplier grows by 0.01. A missed day never takes it back.`}</p>
+      ${isEx ? '' : `<p class="formula">1.10 base + ${(0.05 * (st.level - 1)).toFixed(2)} from level + ${(0.01 * (st.days || 0)).toFixed(2)} from ${st.days || 0} day${st.days === 1 ? '' : 's'} = ${fmtX(mm)}</p>`}
+      <dl class="stat-grid">
+        <div><dt>Level</dt><dd>${st.level}</dd></div>
+        <div><dt>${isEx ? 'Runs' : 'Multiplier'}</dt><dd>${isEx ? st.runs : fmtX(mm)}</dd></div>
+        <div><dt>${isEx ? 'On belt' : 'Charge'}</dt><dd data-live="charge">${isEx ? state.items.filter(i => i.sys === sys.id).length : st.charge}</dd></div>
+        <div><dt>Last run</dt><dd style="font-size:15px">${relDay(st.last)}</dd></div>
+      </dl>
+      <button class="btn big hl" data-act="run">I did it${st.last === dayKey() ? ' again' : ''}</button>
+      <div class="sec">
+        <h3>Run it with a timer</h3>
+        <div class="row">${TIMER_PRESETS.map(m => `<button class="btn small" data-act="timer" data-min="${m}" ${tm ? 'disabled' : ''}>${m} min</button>`).join('')}</div>
+        <p class="hint">${tm ? 'A timer is already running. Finish it first.' : 'A finished session counts as a run and pays 1 extra cog per 5 minutes.'}</p>
+      </div>
+      <div class="sec">
+        <h3>Upgrade</h3>
+        <p class="hint">${maxed ? 'Fully upgraded. This machine is at level 5.' : nextEffect}</p>
+        ${maxed ? '' : `<button class="btn" data-act="upgrade" ${state.cogs < cost ? 'disabled' : ''}>Upgrade to level ${st.level + 1} · ${cost} cogs</button>
+        ${state.cogs < cost ? `<p class="hint">You have ${state.cogs}. ${cost - state.cogs} more to go.</p>` : ''}`}
+      </div>
+      <div class="sec">
+        <h3>Two-minute version</h3>
+        <div class="field"><input id="st-tiny" value="${esc(st.tiny)}" placeholder="${isEx ? 'e.g. Lights out by 11' : 'e.g. Put on your shoes'}" aria-label="Two-minute version"></div>
+        <p class="hint">On hard days, do only this. It still counts as a full run.</p>
+      </div>
+      ${isEx ? '' : `<div class="sec">
+        <h3>Arrange</h3>
+        <div class="row">
+          <button class="btn small" data-act="left" ${k <= 1 ? 'disabled' : ''}>◀ Move earlier</button>
+          <button class="btn small" data-act="right" ${k >= n - 1 ? 'disabled' : ''}>Move later ▶</button>
+          <button class="btn small danger" data-act="remove">${sel.confirm === 'st' ? 'Tap again to remove' : 'Remove machine'}</button>
+        </div>
+      </div>`}
+      <button class="btn ghost small" data-act="sys">See the whole ${esc(sys.name)} plot</button>`;
+  } else {
+    const pct = Math.min(100, Math.round(sys.delivered / sys.target * 100));
+    panel.innerHTML = `
+      <button class="panel-close" data-act="close" aria-label="Close">×</button>
+      <div class="eyebrow"><span class="swatch" style="background:${sys.hue}"></span>Plot</div>
+      <input class="title-input" id="sys-name" value="${esc(sys.name)}" aria-label="Plot name">
+      <div>
+        <div class="big-num" data-live="delivered">${fmtPts(sys.delivered)} <small>/ ${sys.target} points</small></div>
+        <div class="bar" style="margin-top:6px"><i data-live="bar" style="width:${pct}%"></i></div>
+      </div>
+      <p class="desc">A unit leaves the extractor worth 1 point. Each machine with charge multiplies it on the way, so a unit through the whole line is worth <b>${fmtX(lineMult(sys))}</b> right now.</p>
+      <div class="sec">
+        <div class="field"><label for="sys-motto">Conveyor belt: who you are</label><textarea id="sys-motto">${esc(sys.motto)}</textarea></div>
+        <div class="field"><label for="sys-goal">Goal</label><input id="sys-goal" value="${esc(sys.goal)}"></div>
+        <div class="row">
+          <div class="field" style="flex:1"><label for="sys-target">Target points</label><input id="sys-target" type="number" min="10" step="10" value="${sys.target}"></div>
+          <div class="field" style="flex:1"><label for="sys-res">Raw material</label><input id="sys-res" value="${esc(sys.resource)}"></div>
+        </div>
+      </div>
+      <div class="sec">
+        <h3>Machines on this plot</h3>
+        <div class="row" style="flex-direction:column;align-items:stretch;gap:6px">
+          ${sys.stations.map((st, k) => `<button class="btn small" style="text-align:left" data-act="pick" data-id="${st.id}">${k === 0 ? 'Extractor' : k + '.'} ${esc(st.name)} <span style="color:var(--ink-soft)">· ${k === 0 ? 'L' + st.level : fmtX(machineMult(st))}</span></button>`).join('')}
+        </div>
+        <div class="row">
+          <div class="field" style="flex:1"><input id="add-habit" placeholder="New habit, e.g. Stretch for 5 minutes" aria-label="New habit"></div>
+          <button class="btn small" data-act="add">Add machine</button>
+        </div>
+        <p class="hint">New machines go at the end of the line, just before the vault.</p>
+      </div>
+      <div class="sec"><div class="row"><button class="btn small danger" data-act="delsys">${sel.confirm === 'sys' ? `Tap again to remove ${esc(sys.name)}` : 'Remove this plot'}</button></div></div>`;
+  }
+}
+function updateLive(){
+  if (!sel || panel.hidden) return;
+  const sys = getSys(sel.sys); if (!sys) return;
+  const el = panel.querySelector('[data-live="charge"]');
+  if (el && sel.st) {
+    const st = sys.stations.find(s => s.id === sel.st);
+    if (st) el.textContent = sys.stations[0] === st ? state.items.filter(i => i.sys === sys.id).length : st.charge;
+  }
+  const d = panel.querySelector('[data-live="delivered"]');
+  if (d) d.innerHTML = `${fmtPts(sys.delivered)} <small>/ ${sys.target} points</small>`;
+  const b = panel.querySelector('[data-live="bar"]');
+  if (b) b.style.width = Math.min(100, Math.round(sys.delivered / sys.target * 100)) + '%';
+}
+
+panel.addEventListener('click', e => {
+  const b = e.target.closest('[data-act]'); if (!b || b.disabled) return;
+  const sys = getSys(sel?.sys); if (!sys) return;
+  const st = sel.st ? sys.stations.find(s => s.id === sel.st) : null;
+  const act = b.dataset.act;
+  if (act !== 'remove' && act !== 'delsys') sel.confirm = null;
+  switch (act) {
+    case 'close': closePanel(); return;
+    case 'run': runStation(sys, st); break;
+    case 'timer': startTimer(sys, st, +b.dataset.min); break;
+    case 'upgrade': {
+      const c = upgradeCost(st.level);
+      if (state.cogs >= c && st.level < 5) { state.cogs -= c; st.level++; st._bump = performance.now(); toast(`${st.name} is now level ${st.level}.`); refreshStats(); save(); }
+      break;
+    }
+    case 'left': case 'right': {
+      const k = sys.stations.indexOf(st), j = act === 'left' ? k - 1 : k + 1;
+      if (j >= 1 && j < sys.stations.length) { [sys.stations[k], sys.stations[j]] = [sys.stations[j], sys.stations[k]]; resetItemsFor(sys); save(); }
+      break;
+    }
+    case 'remove':
+      if (sel.confirm !== 'st') { sel.confirm = 'st'; break; }
+      sys.stations.splice(sys.stations.indexOf(st), 1); resetItemsFor(sys); sel = {sys: sys.id, st: null}; save(); break;
+    case 'sys': sel = {sys: sys.id, st: null}; break;
+    case 'pick': sel = {sys: sys.id, st: b.dataset.id}; break;
+    case 'add': {
+      const v = $('#add-habit').value.trim(); if (!v) { $('#add-habit').focus(); return; }
+      sys.stations.push({id: uid(), name: v, tiny: '', level: 1, runs: 0, days: 0, charge: 0, last: null});
+      resetItemsFor(sys); toast(`Added "${v}" to ${sys.name}. Start it small.`); save(); break;
+    }
+    case 'delsys':
+      if (sel.confirm !== 'sys') { sel.confirm = 'sys'; break; }
+      state.systems = state.systems.filter(s => s !== sys); state.items = state.items.filter(i => i.sys !== sys.id);
+      stopFollow(); renderJump();
+      toast(`Removed the ${sys.name} plot. You can rebuild it from the library any time.`); closePanel(); save(); return;
+  }
+  renderPanel();
+});
+// items keep their position, but re-check machines after the line changes
+function resetItemsFor(sys){
+  const g = geom(sys, state.systems.indexOf(sys));
+  for (const it of state.items) if (it.sys === sys.id) {
+    let k = 1; while (k < sys.stations.length && it.f >= beltFrac(g, k)) k++;
+    it.next = k;
+  }
+}
+panel.addEventListener('change', e => {
+  const sys = getSys(sel?.sys); if (!sys) return;
+  const st = sel.st ? sys.stations.find(s => s.id === sel.st) : null;
+  const v = e.target.value;
+  switch (e.target.id) {
+    case 'st-name': if (v.trim()) st.name = v.trim(); break;
+    case 'st-tiny': st.tiny = v.trim(); break;
+    case 'sys-name': if (v.trim()) { sys.name = v.trim(); renderJump(); } break;
+    case 'sys-motto': if (v.trim()) sys.motto = v.trim(); break;
+    case 'sys-goal': if (v.trim()) sys.goal = v.trim(); break;
+    case 'sys-target': { const n = Math.max(10, Math.round(+v || 0)); sys.target = n; if (sys.delivered < n) sys.reached = false; updateLive(); break; }
+    case 'sys-res': if (v.trim()) sys.resource = v.trim(); break;
+    default: return;
+  }
+  save();
+});
+panel.addEventListener('keydown', e => { if (e.key === 'Enter' && e.target.id === 'add-habit') panel.querySelector('[data-act="add"]').click(); });
+
+/* ---------- timer ---------- */
+function startTimer(sys, st, mins){
+  if (state.timer) return;
+  state.timer = {sys: sys.id, st: st.id, mins, startAt: Date.now(), endAt: Date.now() + mins * 60000};
+  save(); renderTimer();
+  toast(`Timer started: ${mins} minutes of ${st.name}.`);
+}
+function finishTimer(kind){
+  const tm = state.timer; if (!tm) return;
+  const sys = getSys(tm.sys), st = sys?.stations.find(s => s.id === tm.st);
+  state.timer = null;
+  if (!st) { save(); renderTimer(); return; }
+  if (kind === 'cancel') { toast('Timer cancelled. Nothing lost.'); }
+  else {
+    const mins = kind === 'full' ? tm.mins : Math.floor((Date.now() - tm.startAt) / 60000);
+    if (mins >= 2 || kind === 'full') {
+      runStation(sys, st, Math.floor(mins / 5), true);
+      toast(`${mins} minutes of ${st.name}. Counted as a run, +${1 + Math.floor(mins / 5)} cogs.`);
+      if (kind === 'full') beep();
+    } else toast('Under two minutes, so nothing was logged. Start again whenever you like.');
+  }
+  save(); renderTimer(); if (sel) renderPanel();
+}
+let lastTimerSec = -1;
+function tickTimer(){
+  const tm = state.timer; if (!tm) return;
+  const left = Math.max(0, tm.endAt - Date.now());
+  if (left <= 0) return finishTimer('full');
+  const sec = Math.ceil(left / 1000);
+  if (sec !== lastTimerSec) { lastTimerSec = sec; const el = $('#timerPill .t'); if (el) el.textContent = `${Math.floor(sec/60)}:${String(sec%60).padStart(2,'0')}`; }
+}
+function renderTimer(){
+  const pill = $('#timerPill'), tm = state.timer;
+  if (!tm) { pill.hidden = true; return; }
+  const sys = getSys(tm.sys), st = sys?.stations.find(s => s.id === tm.st);
+  pill.hidden = false; lastTimerSec = -1;
+  pill.innerHTML = `<span class="t">--:--</span><span class="n">${esc(st?.name || 'Session')}</span>
+    <button class="btn small" data-t="early">Done early</button><button class="btn small ghost" data-t="cancel">Cancel</button>`;
+}
+$('#timerPill').addEventListener('click', e => { const b = e.target.closest('[data-t]'); if (b) finishTimer(b.dataset.t); });
+function beep(){
+  try {
+    const a = new (window.AudioContext || window.webkitAudioContext)();
+    [0, .16, .32].forEach((t, i) => { const o = a.createOscillator(), g = a.createGain(); o.type = 'square'; o.frequency.value = [523, 659, 784][i];
+      g.gain.setValueAtTime(.06, a.currentTime + t); g.gain.exponentialRampToValueAtTime(.001, a.currentTime + t + .14);
+      o.connect(g).connect(a.destination); o.start(a.currentTime + t); o.stop(a.currentTime + t + .15); });
+  } catch (e) {}
+}
+
+/* ---------- modals ---------- */
+const scrim = $('#scrim');
+function openModal(html){ scrim.innerHTML = `<div class="modal" role="dialog" aria-modal="true">${html}</div>`; scrim.hidden = false; scrim.querySelector('button, input')?.focus(); }
+function closeModal(){ scrim.hidden = true; scrim.innerHTML = ''; }
+scrim.addEventListener('click', e => { if (e.target === scrim) closeModal(); });
+
+function openLibrary(){
+  const built = new Set(state.systems.map(s => s.tpl));
+  openModal(`
+    <button class="panel-close" data-m="close" aria-label="Close">×</button>
+    <h2>Library of plots</h2>
+    <p class="desc">Pick a line to build on new land. The first habit is the extractor: the foundation that feeds everything after it.</p>
+    <div class="tpl-grid">
+      ${TEMPLATES.map((t, i) => `<article class="tpl">
+        <span class="from">${t.from === 'notebook' ? 'From your notebook' : 'Starter plot'}</span>
+        <h3><span class="swatch" style="background:${HUES[i % HUES.length]}"></span>${esc(t.name)}</h3>
+        <p class="motto">“${esc(t.motto)}”</p>
+        <ol>${t.stations.map((s, k) => `<li>${k === 0 ? '<b>' + esc(s) + '</b>' : esc(s)}</li>`).join('')}</ol>
+        <p class="hint">Goal: ${esc(t.goal)}</p>
+        <button class="btn small" data-m="build" data-k="${t.key}">${built.has(t.key) ? 'Build another' : 'Build this plot'}</button>
+      </article>`).join('')}
+    </div>
+    <div class="sec">
+      <h3>Design your own plot</h3>
+      <div class="field"><label for="c-name">Area of life</label><input id="c-name" placeholder="e.g. Guitar"></div>
+      <div class="field"><label for="c-motto">Belt: I am someone who…</label><input id="c-motto" placeholder="I am a musician who practices daily."></div>
+      <div class="row">
+        <div class="field" style="flex:2;min-width:200px"><label for="c-goal">Goal</label><input id="c-goal" placeholder="Play a full song for friends"></div>
+        <div class="field" style="flex:1;min-width:120px"><label for="c-res">Raw material</label><input id="c-res" placeholder="Practice time"></div>
+      </div>
+      <div class="field"><label for="c-ext">Extractor: the foundation habit</label><input id="c-ext" placeholder="Take the guitar off the wall"></div>
+      <div class="field"><label for="c-machines">Machines: one habit per line, in order</label><textarea id="c-machines" placeholder="Tune up&#10;Play scales for 5 minutes&#10;Learn 4 bars"></textarea></div>
+      <p class="hint">Start each habit so small it takes under two minutes. You can grow it once the line runs every day.</p>
+      <div class="row"><button class="btn hl" data-m="custom">Build my plot</button><span class="hint" id="c-err"></span></div>
+    </div>`);
+}
+function addSystem(sys){
+  state.systems.push(sys); save(); renderJump();
+  closeModal();
+  setView('floor');
+  flyToPlot(state.systems.length - 1);
+  toast(`The ${sys.name} plot is built. Click its extractor to start mining.`);
+}
+scrim.addEventListener('click', e => {
+  const b = e.target.closest('[data-m]'); if (!b) return;
+  const m = b.dataset.m;
+  if (m === 'close') return closeModal();
+  if (m === 'build') { const t = TEMPLATES.find(t => t.key === b.dataset.k); addSystem(buildSystem(t, state.systems.length)); }
+  if (m === 'custom') {
+    const g = id => $(id).value.trim();
+    const name = g('#c-name'), ext = g('#c-ext');
+    const machines = $('#c-machines').value.split('\n').map(s => s.trim()).filter(Boolean);
+    if (!name || !ext) { $('#c-err').textContent = 'Give it a name and an extractor habit to start.'; return; }
+    addSystem(buildSystem({key: 'custom', name, motto: g('#c-motto') || `I am someone who shows up for ${name.toLowerCase()}.`,
+      goal: g('#c-goal') || `Grow in ${name.toLowerCase()}`, target: 2000, resource: g('#c-res') || 'Raw material',
+      stations: [ext, ...machines]}, state.systems.length));
+  }
+  if (m === 'submitquiz') submitQuiz();
+});
+
+function openQuiz(){
+  const today = dayKey();
+  if (!state.systems.length) return openLibrary();
+  if (state.checkinDay === today) {
+    openModal(`<button class="panel-close" data-m="close" aria-label="Close">×</button>
+      <h2>You already checked in today</h2>
+      <p class="desc">The next check-in opens tomorrow. You can still run any machine in the world.</p>
+      ${state.notes.length && state.notes[state.notes.length - 1].day === today ? `<p class="desc">Your note for tomorrow: “${esc(state.notes[state.notes.length - 1].text)}”</p>` : ''}
+      <div class="row"><button class="btn" data-m="close">Back to the world</button></div>`);
+    return;
+  }
+  openModal(`
+    <button class="panel-close" data-m="close" aria-label="Close">×</button>
+    <h2>Daily check-in</h2>
+    <p class="desc">Three quick questions. Each habit you tick runs its machine. Finishing pays 3 cogs per plot.</p>
+    ${state.systems.map(s => `<fieldset class="quiz-sys">
+      <legend><span class="swatch" style="background:${s.hue}"></span>${esc(s.name)}</legend>
+      <div class="hint">1. Which of these did you do today?</div>
+      ${s.stations.map(st => st.last === today
+        ? `<label class="check done"><input type="checkbox" checked disabled> ${esc(st.name)} · already logged</label>`
+        : `<label class="check"><input type="checkbox" data-q="${s.id}" data-st="${st.id}"> ${esc(st.name)}</label>`).join('')}
+      <div class="hint">2. How much did today sound like “${esc(s.motto)}”</div>
+      <div class="rate" role="radiogroup" aria-label="Rating for ${esc(s.name)}">
+        ${[1,2,3,4,5].map(n => `<label><input type="radio" name="r-${s.id}" value="${n}" ${n === 3 ? 'checked' : ''}><span>${n}</span></label>`).join('')}
+      </div>
+    </fieldset>`).join('')}
+    <div class="field"><label for="q-note">3. What would make tomorrow's first habit easier?</label>
+      <input id="q-note" placeholder="e.g. Lay out the jump rope tonight"></div>
+    <div class="row"><button class="btn hl" data-m="submitquiz">Finish check-in</button></div>`);
+}
+function submitQuiz(){
+  let runs = 0, cogs = 0;
+  for (const s of state.systems) {
+    scrim.querySelectorAll(`input[data-q="${s.id}"]:checked`).forEach(cb => {
+      const st = s.stations.find(x => x.id === cb.dataset.st); if (st) { runStation(s, st, 0, true); runs++; cogs++; }
+    });
+    const r = scrim.querySelector(`input[name="r-${s.id}"]:checked`);
+    s.lastRating = r ? +r.value : 3;
+    state.cogs += 3; cogs += 3;
+  }
+  const note = $('#q-note')?.value.trim();
+  if (note) { state.notes.push({day: dayKey(), text: note}); state.notes = state.notes.slice(-60); }
+  state.checkinDay = dayKey(); markDay();
+  closeModal(); refreshStats(); save();
+  toast(runs ? `Check-in done. ${runs} vote${runs > 1 ? 's' : ''} for the person you are becoming, +${cogs} cogs.` : `Check-in done. +${cogs} cogs. Showing up to check in counts too.`, 6000);
+}
+
+$('#b-quiz').addEventListener('click', openQuiz);
+$('#b-lib').addEventListener('click', openLibrary);
+$('#b-add').addEventListener('click', openLibrary);
+
+/* ---------- migrations ---------- */
+function migrate(){
+  state.hist = state.hist || {};
+  for (const s of state.systems) {
+    s.hue = OLD_HUES[s.hue] || s.hue;
+    for (const st of s.stations) if (st.days == null) st.days = st.runs || 0;
+    if ((state.v || 1) < 2) {
+      const t = TEMPLATES.find(t => t.key === s.tpl);
+      if (t && s.target === OLD_TARGETS[s.tpl]) s.target = t.target;   // only defaults move; your own numbers stay
+      if (s.delivered < s.target) s.reached = false;
+    }
+  }
+  for (const it of state.items) if (it.mult == null) it.mult = Math.pow(1.1, it.shaped || 0);
+  const ks = Object.keys(state.hist).sort();
+  if (ks.length > 400) for (const k of ks.slice(0, ks.length - 400)) delete state.hist[k];
+  state.v = 2;
+}
+
+/* ---------- progress page ---------- */
+let view = 'floor', progSel = null, showExample = null;
+const addDays = (k, n) => { const d = new Date(k + 'T12:00'); d.setDate(d.getDate() + n); return dayKey(d); };
+const shortDate = k => new Date(k + 'T12:00').toLocaleDateString(undefined, {month: 'short', day: 'numeric'});
+function scale(d0, d1, r0, r1){ const k = (r1 - r0) / ((d1 - d0) || 1); const f = v => r0 + (v - d0) * k; f.inv = p => d0 + (p - r0) / k; return f; }
+function ticks(min, max, count = 5){
+  const span = (max - min) || 1, raw = span / count, mag = 10 ** Math.floor(Math.log10(raw));
+  const step = [1, 2, 2.5, 5, 10].map(m => m * mag).find(s => s >= raw);
+  const out = []; for (let v = Math.ceil(min / step) * step; v <= max + 1e-9; v += step) out.push(+v.toFixed(6));
+  return out;
+}
+function rng(seed){ return () => { seed = (seed * 16807) % 2147483647; return (seed - 1) / 2147483646; }; }
+
+// Real history, one entry per calendar day from the first logged day to today.
+function buildReal(){
+  const keysH = Object.keys(state.hist || {}).sort();
+  const today = dayKey();
+  const first = keysH[0] || today;
+  const n = Math.max(1, daysBetween(first, today) + 1);
+  const days = Array.from({length: n}, (_, i) => addDays(first, i));
+  const lines = state.systems.map(s => {
+    const r = [], p = [], m = [];
+    let lastM = null;
+    for (const d of days) { const h = state.hist[d]?.[s.id]; if (h && lastM == null) lastM = h.m; }
+    lastM = lastM ?? lineMult(s);
+    for (const d of days) {
+      const h = state.hist[d]?.[s.id];
+      r.push(h ? h.r : 0); p.push(h ? h.p : 0);
+      if (h) lastM = h.m; m.push(lastM);
+    }
+    m[m.length - 1] = lineMult(s);
+    const sumP = p.reduce((a, b) => a + b, 0);
+    let c = Math.max(0, s.delivered - sumP);
+    const cum = p.map(v => (c += v));
+    return {id: s.id, name: s.name, hue: s.hue, goal: s.goal, target: s.target, r, p, m, cum,
+      ext: s.stations[0]?.level || 1, mults: s.stations.slice(1).map(machineMult)};
+  });
+  return {example: false, days, lines};
+}
+// Clearly-labelled example: 75 days of a consistent (not perfect) line.
+function buildExample(){
+  const N = 75, today = dayKey();
+  const days = Array.from({length: N}, (_, i) => addDays(today, i - N + 1));
+  const src = state.systems.length ? state.systems.slice(0, 2) : TEMPLATES.slice(0, 2).map((t, i) => buildSystem(t, i));
+  const lines = src.map((s, li) => {
+    const rand = rng(li * 7919 + 17);
+    const k = Math.max(1, s.stations.length - 1);
+    const md = Array(k).fill(0);
+    const r = [], p = [], m = [], cum = [];
+    let c = 0, ext = 1;
+    for (let i = 0; i < N; i++) {
+      if (i === 30 || i === 60) ext++;
+      const ran = rand() < (li ? .72 : .84);
+      let runs = 0, val = 0;
+      if (ran) {
+        let mult = 1;
+        for (let j = 0; j < k; j++) if (rand() < .85) { md[j]++; runs++; mult *= 1.1 + .01 * md[j]; }
+        runs++; val = ext * mult;
+      }
+      c += val; r.push(runs); p.push(val); cum.push(c);
+      m.push(md.reduce((a, d) => a * (1.1 + .01 * d), 1));
+    }
+    return {id: 'ex' + li, name: s.name, hue: s.hue, goal: s.goal, target: s.target, r, p, m, cum, ext, mults: md.map(d => 1.1 + .01 * d)};
+  });
+  return {example: true, days, lines};
+}
+// Forward projection at the recent pace: each machine keeps getting 1% stronger on the days it runs.
+function project(line, horizon = 730){
+  const n = line.r.length, look = Math.min(14, n);
+  const active = line.r.slice(n - look).filter(v => v > 0).length;
+  const rate = active ? active / look : 1;
+  const mults = line.mults.slice();
+  let c = line.cum[n - 1], goalAt = c >= line.target ? 0 : null;
+  const out = [c];
+  for (let d = 1; d <= horizon && goalAt == null; d++) {
+    for (let j = 0; j < mults.length; j++) mults[j] += .01 * rate;
+    c += line.ext * rate * mults.reduce((a, b) => a * b, 1);
+    out.push(c);
+    if (c >= line.target) goalAt = d;
+  }
+  return {cum: out, goalAt, rate, assumed: !active};
+}
+
+function tipShow(e, html){
+  const t = $('#tip'); t.innerHTML = html; t.hidden = false;
+  const w = t.offsetWidth, h = t.offsetHeight;
+  let x = e.clientX + 14, y = e.clientY + 14;
+  if (x + w > innerWidth - 8) x = e.clientX - w - 14;
+  if (y + h > innerHeight - 8) y = e.clientY - h - 14;
+  t.style.left = Math.max(8, x) + 'px'; t.style.top = Math.max(8, y) + 'px';
+}
+const tipHide = () => { $('#tip').hidden = true; };
+const tipRow = (color, label, value, dashed) => `<div class="t-r"><span><i style="background:${dashed ? 'transparent;border:2px dashed ' + color : color}"></i>${esc(label)}</span><b>${value}</b></div>`;
+
+function crosshair(host, {h, m, n, x, rowsAt, pointsAt}){
+  const svg = host.querySelector('svg'), g = svg.querySelector('.hov');
+  const hit = svg.querySelector('.hit');
+  const move = e => {
+    const r = svg.getBoundingClientRect();
+    const i = clamp(Math.round(x.inv(e.clientX - r.left)), 0, n - 1);
+    const px = x(i);
+    g.innerHTML = `<line x1="${px}" x2="${px}" y1="${m.t}" y2="${h - m.b}"/>` +
+      pointsAt(i).map(p => `<circle cx="${p.x}" cy="${p.y}" r="5" fill="${p.color}" stroke="${COL.card}" stroke-width="2"/>`).join('');
+    tipShow(e, rowsAt(i));
+  };
+  hit.addEventListener('pointermove', move);
+  hit.addEventListener('pointerleave', () => { g.innerHTML = ''; tipHide(); });
+}
+
+function figMultiplier(DS, host){
+  const w = Math.max(320, host.clientWidth), h = 300, m = {l: 48, r: 104, t: 14, b: 30};
+  const n = DS.days.length;
+  const ref = DS.days.map((_, i) => Math.pow(1.01, i));
+  const maxY = Math.max(1.2, ...DS.lines.flatMap(l => l.m), ref[n - 1]) * 1.05;
+  const x = scale(0, Math.max(1, n - 1), m.l, w - m.r), y = scale(1, maxY, h - m.b, m.t);
+  const yt = ticks(1, maxY, 5), xt = ticks(0, n - 1, Math.min(6, n)).filter(v => Number.isInteger(v));
+  let s = '';
+  for (const v of yt) s += `<line class="grid" x1="${m.l}" x2="${w - m.r}" y1="${y(v)}" y2="${y(v)}"/><text class="tick" x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">×${v}</text>`;
+  for (const v of xt) s += `<text class="tick" x="${x(v)}" y="${h - m.b + 18}" text-anchor="middle">${shortDate(DS.days[v])}</text>`;
+  s += `<line class="axis" x1="${m.l}" x2="${w - m.r}" y1="${h - m.b}" y2="${h - m.b}"/><line class="axis" x1="${m.l}" x2="${m.l}" y1="${m.t}" y2="${h - m.b}"/>`;
+  const path = arr => arr.map((v, i) => `${i ? 'L' : 'M'}${x(i).toFixed(1)},${y(v).toFixed(1)}`).join('');
+  s += `<path class="ref" d="${path(ref)}"/>`;
+  const ends = DS.lines.map(l => ({l, y: y(l.m[n - 1])})).concat([{ref: true, y: y(ref[n - 1])}]).sort((a, b) => a.y - b.y);
+  for (let i = 1; i < ends.length; i++) if (ends[i].y - ends[i - 1].y < 16) ends[i].y = ends[i - 1].y + 16;
+  for (const l of DS.lines) s += `<path d="${path(l.m)}" fill="none" stroke="${l.hue}" stroke-width="2" stroke-linejoin="round"/>
+    <circle cx="${x(n - 1)}" cy="${y(l.m[n - 1])}" r="4.5" fill="${l.hue}" stroke="${COL.card}" stroke-width="2"/>`;
+  for (const e of ends) s += `<text class="lbl" x="${w - m.r + 8}" y="${e.y + 5}">${e.ref ? '1.01ⁿ ' + fmtX(ref[n - 1]) : esc(e.l.name.slice(0, 9)) + ' ' + fmtX(e.l.m[n - 1])}</text>`;
+  s += `<g class="hov"></g><rect class="hit" x="${m.l}" y="${m.t}" width="${w - m.l - m.r}" height="${h - m.t - m.b}" fill="transparent"/>`;
+  host.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Line multiplier over time compared with 1 percent better every day">${s}</svg>`;
+  crosshair(host, {h, m, n, x,
+    rowsAt: i => `<div class="t-h">${shortDate(DS.days[i])} · day ${i + 1}</div>` + DS.lines.map(l => tipRow(l.hue, l.name, fmtX(l.m[i]))).join('') + tipRow(COL.soft, '1% a day', fmtX(ref[i]), true),
+    pointsAt: i => DS.lines.map(l => ({x: x(i), y: y(l.m[i]), color: l.hue}))});
+}
+
+function figLatent(DS, line, host){
+  const w = Math.max(320, host.clientWidth), h = 340, m = {l: 56, r: 24, t: 18, b: 30};
+  const n = line.cum.length, pr = project(line);
+  const T2 = n - 1 + (pr.goalAt ?? (pr.cum.length - 1));
+  const goalIdx = pr.goalAt != null ? n - 1 + pr.goalAt : null;
+  const c0 = line.cum[0] - line.p[0];
+  const curve = i => i < n ? line.cum[i] : pr.cum[i - n + 1];
+  const linEnd = goalIdx ?? T2, linTop = goalIdx != null ? line.target : curve(T2);
+  const lin = i => c0 + (linTop - c0) * Math.min(1, i / Math.max(1, linEnd));
+  const maxY = Math.max(line.target, curve(T2)) * 1.06;
+  const x = scale(0, Math.max(1, T2), m.l, w - m.r), y = scale(0, maxY, h - m.b, m.t);
+  const yt = ticks(0, maxY, 5);
+  const xt = ticks(0, T2, 6).filter(v => Number.isInteger(v));
+  let s = '';
+  for (const v of yt) s += `<line class="grid" x1="${m.l}" x2="${w - m.r}" y1="${y(v)}" y2="${y(v)}"/><text class="tick" x="${m.l - 8}" y="${y(v) + 4}" text-anchor="end">${v >= 1000 ? (v / 1000) + 'k' : v}</text>`;
+  for (const v of xt) s += `<text class="tick" x="${x(v)}" y="${h - m.b + 18}" text-anchor="middle">${shortDate(addDays(DS.days[0], v))}</text>`;
+  const stp = Math.max(1, Math.floor(T2 / 300));
+  const idx = []; for (let i = 0; i <= T2; i += stp) idx.push(i); if (idx[idx.length - 1] !== T2) idx.push(T2);
+  const up = idx.map(i => `${x(i).toFixed(1)},${y(lin(i)).toFixed(1)}`);
+  const lo = idx.map(i => `${x(i).toFixed(1)},${y(Math.min(lin(i), curve(i))).toFixed(1)}`).reverse();
+  s += `<defs><pattern id="hatch" width="7" height="7" patternUnits="userSpaceOnUse" patternTransform="rotate(45)"><line x1="0" y1="0" x2="0" y2="7" stroke="${COL.soft}" stroke-width="2" opacity=".55"/></pattern></defs>`;
+  s += `<polygon points="${up.concat(lo).join(' ')}" fill="url(#hatch)"/>`;
+  s += `<line x1="${m.l}" x2="${w - m.r}" y1="${y(line.target)}" y2="${y(line.target)}" stroke="${COL.ink}" stroke-width="1.5" stroke-dasharray="2 4"/>`;
+  s += `<text class="ann" x="${m.l + 6}" y="${y(line.target) - 6}">GOAL · ${esc(line.goal.toUpperCase().slice(0, 40))}</text>`;
+  s += `<line class="axis" x1="${m.l}" x2="${w - m.r}" y1="${h - m.b}" y2="${h - m.b}"/><line class="axis" x1="${m.l}" x2="${m.l}" y1="${m.t}" y2="${h - m.b}"/>`;
+  s += `<line x1="${x(0)}" y1="${y(c0)}" x2="${x(linEnd)}" y2="${y(linTop)}" stroke="${COL.soft}" stroke-width="2"/>`;
+  const pathR = (a, b) => { let d = ''; for (let i = a; i <= b; i++) d += `${i === a ? 'M' : 'L'}${x(i).toFixed(1)},${y(curve(i)).toFixed(1)}`; return d; };
+  s += `<path d="${pathR(0, n - 1)}" fill="none" stroke="${line.hue}" stroke-width="2.5" stroke-linejoin="round"/>`;
+  s += `<path d="${pathR(n - 1, T2)}" fill="none" stroke="${line.hue}" stroke-width="2" stroke-dasharray="6 5"/>`;
+  s += `<line x1="${x(n - 1)}" x2="${x(n - 1)}" y1="${m.t}" y2="${h - m.b}" stroke="${COL.ink}" stroke-width="1" stroke-dasharray="3 3"/>`;
+  s += `<circle cx="${x(n - 1)}" cy="${y(curve(n - 1))}" r="5" fill="${line.hue}" stroke="${COL.card}" stroke-width="2"/>`;
+  s += `<text class="ann" x="${x(n - 1) + 6}" y="${h - m.b - 8}">TODAY</text>`;
+  const li = Math.round(T2 * .42);
+  s += `<text class="ann" x="${x(li)}" y="${y(lin(li)) - 14}" text-anchor="end">WHAT YOU THINK SHOULD HAPPEN</text>`;
+  let vi = 0, vgap = 0; for (const i of idx) { const gp = lin(i) - curve(i); if (gp > vgap) { vgap = gp; vi = i; } }
+  if (vgap > maxY * .03) s += `<text class="ann" x="${x(vi)}" y="${y((lin(vi) + curve(vi)) / 2) + 4}" text-anchor="middle" style="paint-order:stroke" stroke="${COL.card}" stroke-width="4">VALLEY OF DISAPPOINTMENT</text>`;
+  const ai = Math.round(T2 * .86);
+  s += `<text class="ann" x="${x(ai) - 10}" y="${y(curve(ai)) + 4}" text-anchor="end">WHAT ACTUALLY HAPPENS</text>`;
+  s += `<g class="hov"></g><rect class="hit" x="${m.l}" y="${m.t}" width="${w - m.l - m.r}" height="${h - m.t - m.b}" fill="transparent"/>`;
+  host.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Cumulative points compared with a straight-line expectation">${s}</svg>`;
+  crosshair(host, {h, m, n: T2 + 1, x,
+    rowsAt: i => `<div class="t-h">${shortDate(addDays(DS.days[0], i))}${i > n - 1 ? ' · projected' : ''}</div>` +
+      tipRow(line.hue, i > n - 1 ? 'Projected points' : 'Points so far', fmtPts(curve(i)), i > n - 1) + tipRow(COL.soft, 'Straight-line hope', fmtPts(lin(i))),
+    pointsAt: i => [{x: x(i), y: y(curve(i)), color: line.hue}, {x: x(i), y: y(lin(i)), color: COL.soft}]});
+  return {pr, goalIdx};
+}
+
+function figDaily(DS, host){
+  const N = Math.min(30, DS.days.length), off = DS.days.length - N;
+  const w = Math.max(300, host.clientWidth), h = 240, m = {l: 34, r: 8, t: 10, b: 28};
+  const tot = i => DS.lines.reduce((a, l) => a + l.r[off + i], 0);
+  const maxY = Math.max(4, ...Array.from({length: N}, (_, i) => tot(i)));
+  const y = scale(0, maxY, h - m.b, m.t);
+  const band = (w - m.l - m.r) / N, bw = Math.max(3, band - 2);
+  let s = '';
+  for (const v of ticks(0, maxY, 4).filter(Number.isInteger)) s += `<line class="grid" x1="${m.l}" x2="${w - m.r}" y1="${y(v)}" y2="${y(v)}"/><text class="tick" x="${m.l - 6}" y="${y(v) + 4}" text-anchor="end">${v}</text>`;
+  for (let i = 0; i < N; i++) {
+    let acc = 0; const bx = m.l + i * band + 1;
+    s += `<g data-i="${i}">`;
+    DS.lines.forEach(l => {
+      const v = l.r[off + i]; if (!v) return;
+      const y0 = y(acc), y1 = y(acc + v); acc += v;
+      s += `<rect x="${bx}" y="${y1 + 1}" width="${bw}" height="${Math.max(1, y0 - y1 - 2)}" fill="${l.hue}" rx="1.5"/>`;
+    });
+    s += `<rect x="${m.l + i * band}" y="${m.t}" width="${band}" height="${h - m.t - m.b}" fill="transparent"/></g>`;
+    if (i % Math.ceil(N / 5) === 0 || i === N - 1) s += `<text class="tick" x="${bx + bw / 2}" y="${h - m.b + 18}" text-anchor="middle">${shortDate(DS.days[off + i])}</text>`;
+  }
+  s += `<line class="axis" x1="${m.l}" x2="${w - m.r}" y1="${h - m.b}" y2="${h - m.b}"/>`;
+  host.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Habit runs per day for the last ${N} days">${s}</svg>`;
+  host.querySelectorAll('g[data-i]').forEach(g => {
+    const i = +g.dataset.i;
+    g.addEventListener('pointermove', e => tipShow(e, `<div class="t-h">${shortDate(DS.days[off + i])}</div>` +
+      DS.lines.map(l => tipRow(l.hue, l.name, l.r[off + i])).join('') + `<div class="t-r"><span>Total votes</span><b>${tot(i)}</b></div>`));
+    g.addEventListener('pointerleave', tipHide);
+  });
+}
+
+function figCalendar(DS, host){
+  const weeks = 18, today = new Date(dayKey() + 'T12:00');
+  const dow = (today.getDay() + 6) % 7;
+  const start = addDays(dayKey(), -(weeks - 1) * 7 - dow);
+  const byDay = new Map(DS.days.map((d, i) => [d, DS.lines.reduce((a, l) => a + l.r[i], 0)]));
+  const cell = Math.max(10, Math.min(18, Math.floor((host.clientWidth - 30) / weeks) - 3)), gap = 3;
+  const w = 30 + weeks * (cell + gap), h = 7 * (cell + gap) + 4;
+  const lvl = v => !v ? 0 : v <= 2 ? .3 : v <= 5 ? .55 : v <= 9 ? .8 : 1;
+  let s = '';
+  ['M', '', 'W', '', 'F', '', ''].forEach((l, r) => { if (l) s += `<text class="tick" x="0" y="${r * (cell + gap) + cell - 2}">${l}</text>`; });
+  for (let wk = 0; wk < weeks; wk++) for (let r = 0; r < 7; r++) {
+    const d = addDays(start, wk * 7 + r); if (d > dayKey()) continue;
+    const v = byDay.get(d) || 0, cx = 30 + wk * (cell + gap), cy = r * (cell + gap);
+    s += v ? `<rect data-d="${d}" data-v="${v}" x="${cx}" y="${cy}" width="${cell}" height="${cell}" rx="3" fill="${COL.ink}" fill-opacity="${lvl(v)}"/>`
+           : `<rect data-d="${d}" data-v="0" x="${cx + .75}" y="${cy + .75}" width="${cell - 1.5}" height="${cell - 1.5}" rx="3" fill="none" stroke="${COL.line}" stroke-width="1.5"/>`;
+  }
+  host.innerHTML = `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" role="img" aria-label="Calendar of days you showed up">${s}</svg>`;
+  host.querySelectorAll('rect[data-d]').forEach(r => {
+    r.addEventListener('pointermove', e => tipShow(e, `<div class="t-h">${shortDate(r.dataset.d)}</div><div class="t-r"><span>Habit runs</span><b>${r.dataset.v}</b></div>`));
+    r.addEventListener('pointerleave', tipHide);
+  });
+}
+
+function renderProgress(){
+  const root = $('#view-progress');
+  const real = buildReal();
+  const realActive = real.days.filter((_, i) => real.lines.some(l => l.r[i] > 0)).length;
+  if (showExample == null) showExample = realActive < 3;
+  const DS = showExample ? buildExample() : real;
+  if (!DS.lines.length) { root.innerHTML = `<h2>Progress</h2><p class="desc">Build a plot from the library and your graphs will start here.</p>`; return; }
+  if (!progSel || !DS.lines.find(l => l.id === progSel)) progSel = DS.lines[0].id;
+  const line = DS.lines.find(l => l.id === progSel);
+  const totalPts = state.systems.reduce((a, s) => a + s.delivered, 0);
+  const best = state.systems.reduce((b, s) => !b || lineMult(s) > lineMult(b) ? s : b, null);
+  const yearAt = l => l.mults.reduce((a, mm) => a * (mm + 3.65), 1);
+  root.innerHTML = `
+    <h2>Progress</h2>
+    ${DS.example ? `<div class="banner"><b>Example data</b><span>These graphs show 75 imagined days of a steady line, so you can see the shape. Your own curves replace them after 3 days of runs.</span>${realActive ? '<button class="btn small" id="ex-off">Show my data</button>' : ''}</div>`
+      : `<div class="banner"><span>Your real history since ${shortDate(DS.days[0])}.</span><button class="btn small ghost" id="ex-on">Show the example</button></div>`}
+    <div class="tiles">
+      <div class="tile"><span>Points delivered</span><b>${fmtPts(totalPts)}</b><small>across ${state.systems.length} plot${state.systems.length === 1 ? '' : 's'}</small></div>
+      <div class="tile"><span>Strongest line</span><b>${best ? fmtX(lineMult(best)) : '×1.00'}</b><small>${best ? esc(best.name) + ', per unit' : ''}</small></div>
+      <div class="tile"><span>Days shown up</span><b>${state.days}</b><small>never goes down</small></div>
+      <div class="tile"><span>Identity votes</span><b>${state.votes}</b><small>one per habit run</small></div>
+    </div>
+    <article class="fig">
+      <div class="fig-head"><div><h3>1% better every day</h3><p class="eq">1.01³⁶⁵ = 37.78 · each machine: 1.10 + 0.01 a day · line = machines multiplied</p></div></div>
+      <div class="legend">${DS.lines.map(l => `<span><i style="background:${l.hue}"></i>${esc(l.name)}</span>`).join('')}<span><i class="dash"></i>1% better every day</span></div>
+      <div class="chart" id="c-mult"></div>
+      <p class="cap">The book's curve is one habit getting 1% better. A line multiplies several machines, so it climbs faster than 1.01ⁿ. If every machine on ${esc(line.name)} ran daily for a year, one unit would be worth about <b>${fmtX(yearAt(line))}</b>.</p>
+      <details class="nums"><summary>See the numbers</summary><div class="tbl-wrap"><table><tr><th>Date</th>${DS.lines.map(l => `<th>${esc(l.name)}</th>`).join('')}<th>1.01ⁿ</th></tr>
+        ${DS.days.map((d, i) => ({d, i})).filter(o => o.i % 7 === 0 || o.i === DS.days.length - 1).map(({d, i}) => `<tr><td>${shortDate(d)}</td>${DS.lines.map(l => `<td>${fmtX(l.m[i])}</td>`).join('')}<td>${fmtX(Math.pow(1.01, i))}</td></tr>`).join('')}</table></div></details>
+    </article>
+    <article class="fig">
+      <div class="fig-head"><div><h3>The plateau of latent potential</h3><p class="eq">points delivered vs. the straight line you expect</p></div>
+        <div class="chips" role="group" aria-label="Choose a plot">${DS.lines.map(l => `<button data-line="${l.id}" aria-pressed="${l.id === progSel}"><i class="swatch" style="background:${l.hue}"></i>${esc(l.name)}</button>`).join('')}</div></div>
+      <div class="legend"><span><i style="background:${line.hue}"></i>Points so far</span><span><i style="height:2px;background:repeating-linear-gradient(90deg,${line.hue} 0 5px,transparent 5px 9px)"></i>Projected at your pace</span><span><i style="background:var(--ink-soft)"></i>Straight-line hope</span></div>
+      <div class="chart" id="c-latent"></div>
+      <p class="cap" id="latent-cap"></p>
+    </article>
+    <div class="two">
+      <article class="fig">
+        <div class="fig-head"><div><h3>Votes per day</h3><p class="eq">habit runs, last ${Math.min(30, DS.days.length)} days</p></div></div>
+        <div class="legend">${DS.lines.map(l => `<span><i style="background:${l.hue}"></i>${esc(l.name)}</span>`).join('')}</div>
+        <div class="chart" id="c-daily"></div>
+      </article>
+      <article class="fig">
+        <div class="fig-head"><div><h3>Days shown up</h3><p class="eq">last 18 weeks</p></div></div>
+        <div class="chart" id="c-cal"></div>
+        <p class="cap">Darker squares mean more runs. Empty days stay blank: nothing to make up, just pick up again.</p>
+      </article>
+    </div>
+    <article class="fig">
+      <div class="fig-head"><div><h3>Where the compounding comes from</h3><p class="eq">what one unit is worth when it reaches the vault today</p></div></div>
+      ${state.systems.map(s => `<div class="chain"><div class="chain-name"><span class="swatch" style="background:${s.hue}"></span>${esc(s.name)}</div>
+        <div class="chain-row"><div class="factor"><b>1</b><small>${esc(s.stations[0]?.name || '')}</small></div>
+        ${s.stations.slice(1).map(st => `<span class="op">×</span><div class="factor"><b>${machineMult(st).toFixed(2)}</b><small>${esc(st.name)}</small></div>`).join('')}
+        <span class="op">=</span><div class="factor total"><b>${fmtX(lineMult(s))}</b><small>per unit</small></div></div></div>`).join('')}
+    </article>`;
+  figMultiplier(DS, $('#c-mult'));
+  const {pr, goalIdx} = figLatent(DS, line, $('#c-latent'));
+  const pace = pr.assumed ? 'if you run the line every day' : `at your recent pace (${Math.round(pr.rate * 100)}% of days)`;
+  $('#latent-cap').innerHTML = goalIdx != null
+    ? `Early on, results hide under the straight line. That gap is the valley of disappointment, and the work is still adding up. ${pace[0].toUpperCase() + pace.slice(1)}, ${esc(line.name)} reaches its goal around <b>${shortDate(addDays(DS.days[0], goalIdx))}</b>.`
+    : `Early on, results hide under the straight line, and the work is still adding up. ${pace[0].toUpperCase() + pace.slice(1)}, the goal is more than two years out. Adding or upgrading a machine bends the curve up.`;
+  figDaily(DS, $('#c-daily'));
+  figCalendar(DS, $('#c-cal'));
+}
+$('#view-progress').addEventListener('click', e => {
+  const b = e.target.closest('[data-line]');
+  if (b) { progSel = b.dataset.line; renderProgress(); return; }
+  if (e.target.id === 'ex-off') { showExample = false; renderProgress(); }
+  if (e.target.id === 'ex-on') { showExample = true; renderProgress(); }
+});
+function setView(v){
+  view = v;
+  $('#tab-floor').setAttribute('aria-selected', v === 'floor');
+  $('#tab-prog').setAttribute('aria-selected', v === 'progress');
+  $('#view-floor').hidden = v !== 'floor';
+  $('#view-progress').hidden = v !== 'progress';
+  tipHide(); keys.clear();
+  if (v === 'progress') { closePanel(); renderProgress(); }
+}
+$('#tab-floor').addEventListener('click', () => setView('floor'));
+$('#tab-prog').addEventListener('click', () => setView('progress'));
+let progResize;
+window.addEventListener('resize', () => { if (view === 'progress') { clearTimeout(progResize); progResize = setTimeout(renderProgress, 150); } });
+
+/* ---------- boot ---------- */
+async function start(hot){
+  readColors();
+  const fromStore = await connectStore();
+  state = hot?.state || fromStore || readLocal() || defaultState();
+  migrate();
+  for (const s of state.systems) for (const st of s.stations) delete st._bump;
+  setSaveNote();
+  try { await document.fonts.ready; } catch (e) {}
+  $('#loading').remove();
+  const today = dayKey();
+  if (state.lastVisit && daysBetween(state.lastVisit, today) >= 2) {
+    toast('Welcome back. Everything is right where you left it. Pick one machine and run it once.', 7000);
+  }
+  state.lastVisit = today;
+  refreshStats(); renderTimer(); renderJump(); resize();
+  let saved = null; try { saved = JSON.parse(localStorage.getItem(LS_CAM) || 'null'); } catch (e) {}
+  if (hot?.cam) Object.assign(cam, hot.cam, {follow: null, anim: false});
+  else if (saved && isFinite(saved.x)) { cam.x = saved.x; cam.y = saved.y; cam.z = clamp(saved.z, ZMIN, ZMAX); }
+  else flyToPlot(0, true);
+  clampCam(); settle();
+  save();
+  requestAnimationFrame(frame);
+}
+const mq = matchMedia('(prefers-color-scheme: dark)');
+mq.addEventListener?.('change', readColors);
+new MutationObserver(readColors).observe(document.documentElement, {attributes: true, attributeFilter: ['data-theme']});
+document.addEventListener('visibilitychange', () => { if (document.hidden) { flush(); saveCam(); } });
+window.claude?.hot?.snapshot?.(() => ({state, cam: {x: cam.x, y: cam.y, z: cam.z}}));
+const hot = window.claude?.hot;
+hot?.ready ? hot.ready(start) : start(hot?.data ?? {});
+})();
+</script>
+
+</body></html>
